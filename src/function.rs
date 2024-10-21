@@ -37,6 +37,12 @@ impl Function for Square {
     }
 }
 
+
+pub fn square(x: &Variable)-> Variable {
+    let mut f = Square::default();
+    f.call(x)
+}
+
 #[derive(Default)]
 pub struct Exp {
     input: Option<Variable>,
@@ -58,6 +64,11 @@ impl Function for Exp {
     fn get_input(&mut self) -> Option<&mut Variable> {
         self.input.as_mut()
     }
+}
+
+pub fn exp(x: &Variable) -> Variable {
+    let mut f = Exp::default();
+    f.call(x)
 }
 
 fn numerical_diff(f: &mut impl Function, x: Variable) -> f64 {
@@ -88,7 +99,6 @@ mod tests {
         let x = 10.0;
         let mut f = Square::default();
         let mut y = f.call(&Variable::new(x));
-        y.grad = 1.0;
         let result = y.backward();
         assert_eq!(true, result.is_some());
         assert_eq!(x, result.unwrap().data);

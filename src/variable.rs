@@ -12,7 +12,7 @@ impl Variable {
     pub fn new(data: f64) -> Self {
         return Variable {
             data: data,
-            grad: 0.0,
+            grad: 1.0,
             creator: None,
         };
     }
@@ -24,8 +24,9 @@ impl Variable {
     pub fn backward(&mut self) -> Option<&Variable> {
         let mut functions = VecDeque::new();
         functions.push_back(self.creator.as_mut()?);
+        let grad = self.grad;
         while let Some(f) = functions.pop_front() {
-            let grad = f.backward(self.grad);
+            let grad = f.backward(grad);
             let var = f.get_input()?;
             var.grad = grad;
             if var.creator.is_none() {
