@@ -1,18 +1,20 @@
+use ndarray::{Array, IxDyn};
 use std::collections::VecDeque;
 
 use crate::function::Function;
 
 pub struct Variable {
-    pub data: f64,
-    pub grad: f64,
+    pub data: Array<f64, IxDyn>,
+    pub grad: Array<f64, IxDyn>,
     pub creator: Option<Box<dyn Function>>,
 }
 
 impl Variable {
-    pub fn new(data: f64) -> Self {
+    pub fn new(data: Array<f64, IxDyn>) -> Self {
+        let grad = Array::ones(data.shape());
         return Variable {
             data: data,
-            grad: 1.0,
+            grad: grad,
             creator: None,
         };
     }
@@ -24,9 +26,9 @@ impl Variable {
     pub fn backward(&mut self) -> Option<&Variable> {
         let mut functions = VecDeque::new();
         functions.push_back(self.creator.as_mut()?);
-        let grad = self.grad;
+        let grad = self.grad.clone();
         while let Some(f) = functions.pop_front() {
-            let grad = f.backward(grad);
+            let grad = f.backward(&grad);
             let var = f.get_input()?;
             var.grad = grad;
             if var.creator.is_none() {
