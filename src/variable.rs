@@ -9,6 +9,7 @@ use std::rc::Rc;
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
     pub grad: Option<Array<f64, IxDyn>>,
+    pub retain_grad: bool,
     pub creator: Option<Rc<dyn Function>>,
 }
 
@@ -17,6 +18,7 @@ impl Variable {
         return Variable {
             data: data,
             grad: None,
+            retain_grad: false,
             creator: None,
         };
     }
@@ -40,13 +42,16 @@ impl Variable {
         let self_ptr = self as *mut Variable;
         while let Some(f) = functions.pop_front() {
             let mut gys = Vec::new();
-            for output in f.get_outputs().iter() {
+            for output in f.get_outputs().iter_mut() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
                     gys.push(self.grad.clone().unwrap());
                 } else {
-                    let v_ref = output.borrow_mut();
+                    let mut v_ref = output.borrow_mut();
                     let grad = v_ref.grad.clone();
+                    if self.retain_grad {
+                        v_ref.grad = None
+                    }
                     let grad = if grad.is_none() {
                         Array::ones(v_ref.data.shape())
                     } else {
@@ -84,6 +89,7 @@ impl Clone for Variable {
         return Variable {
             data: self.data.clone(),
             grad: self.grad.clone(),
+            retain_grad: self.retain_grad,
             creator: None,
         };
     }
