@@ -2,21 +2,21 @@ use crate::function::Function;
 use ndarray::{Array, IxDyn};
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::f64::consts::E;
 use std::ptr;
 use std::rc::Rc;
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
-    pub grad: Array<f64, IxDyn>,
+    pub grad: Option<Array<f64, IxDyn>>,
     pub creator: Option<Rc<dyn Function>>,
 }
 
 impl Variable {
     pub fn new(data: Array<f64, IxDyn>) -> Self {
-        let grad = Array::ones(data.shape());
         return Variable {
             data: data,
-            grad: grad,
+            grad: None,
             creator: None,
         };
     }
@@ -25,7 +25,14 @@ impl Variable {
         self.creator = Some(creator);
     }
 
+    pub fn cleargrad(&mut self) {
+        self.grad = None
+    }
+
     pub fn backward(&mut self) -> Option<Rc<RefCell<Variable>>> {
+        if self.grad.is_none() {
+            self.grad = Some(Array::ones(self.data.shape()))
+        }
         let mut functions = VecDeque::new();
         if let Some(creator) = self.creator.as_mut() {
             functions.push_back(creator.clone());
@@ -36,10 +43,15 @@ impl Variable {
             for output in f.get_outputs().iter() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
-                    gys.push(self.grad.clone());
+                    gys.push(self.grad.clone().unwrap());
                 } else {
                     let v_ref = output.borrow_mut();
                     let grad = v_ref.grad.clone();
+                    let grad = if grad.is_none() {
+                        Array::ones(v_ref.data.shape())
+                    } else {
+                        grad.clone().unwrap()
+                    };
                     gys.push(grad.clone());
                 }
             }
@@ -49,7 +61,12 @@ impl Variable {
             for var in vars.iter_mut() {
                 if let Some(gx) = gxs.pop_front() {
                     let mut vref = var.borrow_mut();
-                    vref.grad = gx;
+                    if vref.grad.is_none() {
+                        vref.grad = Some(gx)
+                    } else {
+                        let tmp = &vref.grad.clone().unwrap();
+                        vref.grad = Some(tmp + gx);
+                    }
                     if let Some(creator) = vref.creator.as_mut() {
                         functions.push_back(creator.clone());
                     } else {

@@ -210,7 +210,7 @@ mod tests {
         assert_eq!(true, result.is_some());
         let binding = result.unwrap();
         let input_var = binding.borrow_mut();
-        let grad = input_var.grad.clone().into_raw_vec_and_offset().0;
+        let grad = input_var.grad.clone().unwrap().into_raw_vec_and_offset().0;
         assert_eq!(expected, grad)
     }
 }
