@@ -33,7 +33,7 @@ impl Variable {
         let self_ptr = self as *mut Variable;
         while let Some(f) = functions.pop_front() {
             let mut gys = Vec::new();
-            if let Some(output) = f.get_outputs() {
+            for output in f.get_outputs().iter() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
                     gys.push(self.grad.clone());

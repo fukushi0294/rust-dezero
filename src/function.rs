@@ -36,7 +36,7 @@ pub trait Function {
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
     fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
     fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
-    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>>;
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
 }
 
 pub struct Square {
@@ -88,11 +88,11 @@ impl Function for Square {
             vec![]
         }
     }
-    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>> {
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
         if let Some(v) = &self.output {
-            Some(Rc::clone(v))
+            vec![Rc::clone(v)]
         } else {
-            None
+            vec![]
         }
     }
 }
@@ -151,11 +151,11 @@ impl Function for Exp {
             vec![]
         }
     }
-    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>> {
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
         if let Some(v) = &self.output {
-            Some(Rc::clone(v))
+            vec![Rc::clone(v)]
         } else {
-            None
+            vec![]
         }
     }
 }
