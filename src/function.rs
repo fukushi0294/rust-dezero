@@ -1,7 +1,9 @@
 use crate::variable::Variable;
+use crate::config::CONFIG;
 use ndarray::{Array, IxDyn};
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
+
 
 pub trait Function {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
@@ -18,10 +20,12 @@ pub trait Function {
             refs.push(output_ref.clone());
             outputs.push(output_ref);
         }
-
-        let function_node = self.new_instance(inputs, &refs);
-        for output in outputs.iter_mut() {
-            output.borrow_mut().creator = Some(function_node.clone());
+        
+        if CONFIG.lock().unwrap().enable_backprop {
+            let function_node = self.new_instance(inputs, &refs);
+            for output in outputs.iter_mut() {
+                output.borrow_mut().creator = Some(function_node.clone());
+            }
         }
         outputs
     }
@@ -233,6 +237,7 @@ fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
 #[cfg(test)]
 mod tests {
     use ndarray::Array1;
+    use crate::no_grad;
 
     use super::*;
 
@@ -287,5 +292,23 @@ mod tests {
         let input_var = binding.borrow_mut();
         let grad = input_var.grad.clone().unwrap().into_raw_vec_and_offset().0;
         assert_eq!(vec![64.0], grad)
+    }
+
+    #[test]
+    fn forward_only_test() {
+        no_grad!();
+        let x1 = vec![5.0, 10.0];
+        let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
+        let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
+        let mut f = Square::new();
+        let actual = f.call(&[Rc::new(RefCell::new(x2))]);
+        assert_eq!(1, actual.len());
+        let mut result = Vec::new();
+        let var = actual.get(0).unwrap().borrow_mut();
+        for data in var.data.clone() {
+            result.push(data);
+        }
+        assert_eq!(expected, result);
+        
     }
 }
