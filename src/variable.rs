@@ -1,12 +1,14 @@
-use ndarray::{Array, IxDyn};
-use std::collections::VecDeque;
-
 use crate::function::Function;
+use ndarray::{Array, IxDyn};
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::ptr;
+use std::rc::Rc;
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
     pub grad: Array<f64, IxDyn>,
-    pub creator: Option<Box<dyn Function>>,
+    pub creator: Option<Rc<dyn Function>>,
 }
 
 impl Variable {
@@ -19,23 +21,53 @@ impl Variable {
         };
     }
 
-    pub fn set_creator(&mut self, creator: Box<dyn Function>) {
+    pub fn set_creator(&mut self, creator: Rc<dyn Function>) {
         self.creator = Some(creator);
     }
 
-    pub fn backward(&mut self) -> Option<&Variable> {
+    pub fn backward(&mut self) -> Option<Rc<RefCell<Variable>>> {
         let mut functions = VecDeque::new();
-        functions.push_back(self.creator.as_mut()?);
-        let grad = self.grad.clone();
+        if let Some(creator) = self.creator.as_mut() {
+            functions.push_back(creator.clone());
+        }
+        let self_ptr = self as *mut Variable;
         while let Some(f) = functions.pop_front() {
-            let grad = f.backward(&grad);
-            let var = f.get_input()?;
-            var.grad = grad;
-            if var.creator.is_none() {
-                return Some(var);
+            let mut gys = Vec::new();
+            if let Some(output) = f.get_outputs() {
+                let output_ptr = output.as_ptr();
+                if ptr::eq(self_ptr, output_ptr) {
+                    gys.push(self.grad.clone());
+                } else {
+                    let v_ref = output.borrow_mut();
+                    let grad = v_ref.grad.clone();
+                    gys.push(grad.clone());
+                }
             }
-            functions.push_back(var.creator.as_mut()?);
+            let gxs = f.backward(&gys);
+            let mut gxs = VecDeque::from(gxs);
+            let mut vars = f.get_inputs();
+            for var in vars.iter_mut() {
+                if let Some(gx) = gxs.pop_front() {
+                    let mut vref = var.borrow_mut();
+                    vref.grad = gx;
+                    if let Some(creator) = vref.creator.as_mut() {
+                        functions.push_back(creator.clone());
+                    } else {
+                        return Some(Rc::clone(var));
+                    }
+                }
+            }
         }
         None
+    }
+}
+
+impl Clone for Variable {
+    fn clone(&self) -> Self {
+        return Variable {
+            data: self.data.clone(),
+            grad: self.grad.clone(),
+            creator: None,
+        };
     }
 }

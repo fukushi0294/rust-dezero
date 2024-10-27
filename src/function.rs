@@ -1,84 +1,179 @@
 use crate::variable::Variable;
+use core::borrow;
 use ndarray::{Array, IxDyn};
+use std::borrow::Borrow;
+use std::cell::{Ref, RefCell, RefMut};
+use std::process::Output;
+use std::rc::{Rc, Weak};
 
 pub trait Function {
-    fn call(&mut self, input: &Variable) -> Variable {
-        let x = input.data.clone();
-        let y = self.forward(&x);
-        let mut output = Variable::new(y);
-        output.set_creator(self.new_instance(input));
-        output
+    fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
+        let mut x = Vec::new();
+        for v in inputs.iter() {
+            let var = v.borrow_mut().clone();
+            x.push(var.data.clone());
+        }
+        let ys = self.forward(x.as_slice());
+        let mut outputs = Vec::new();
+        let mut refs = Vec::new();
+        for y in ys {
+            let output_ref = Rc::new(RefCell::new(Variable::new(y)));
+            refs.push(output_ref.clone());
+            outputs.push(output_ref);
+        }
+
+        let function_node = self.new_instance(inputs, &refs);
+        for output in outputs.iter_mut() {
+            output.borrow_mut().creator = Some(function_node.clone());
+        }
+        outputs
     }
-    fn new_instance(&self, input: &Variable) -> Box<dyn Function>;
-    fn forward(&self, input: &Array<f64,IxDyn>) -> Array<f64, IxDyn>;
-    fn backward(&mut self, gy: &Array<f64,IxDyn>) -> Array<f64, IxDyn>;
-    fn get_input(&mut self) -> Option<&mut Variable>;
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function>;
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>>;
 }
 
-#[derive(Default)]
 pub struct Square {
-    input: Option<Variable>,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Square {
+    pub fn new() -> Self {
+        Square {
+            input: None,
+            output: None,
+        }
+    }
 }
 
 impl Function for Square {
-    fn new_instance(&self, input: &Variable) -> Box<dyn Function> {
-        Box::new(Square {
-            input: Some(Variable::new(input.data.clone())),
-        })
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Square {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
     }
-    fn forward(&self, input: &Array<f64, IxDyn>) -> Array<f64, IxDyn> {
-        input.pow2()
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.pow2()]
     }
-    fn backward(&mut self, gy: &Array<f64, IxDyn>) -> Array<f64, IxDyn> {
-        let x = self.input.as_ref().unwrap();
-        2.0 * x.data.clone() * gy
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.input {
+            let x = v.borrow_mut().data.clone();
+            return vec![2.0 * x * &gys[0]];
+        } else {
+            return vec![];
+        }
     }
-    fn get_input(&mut self) -> Option<&mut Variable> {
-        self.input.as_mut()
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            Some(Rc::clone(v))
+        } else {
+            None
+        }
     }
 }
 
-
-pub fn square(x: &Variable)-> Variable {
-    let mut f = Square::default();
-    f.call(x)
+pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
+    let mut f = Square::new();
+    f.call(&[x])
 }
 
-#[derive(Default)]
 pub struct Exp {
-    input: Option<Variable>,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Exp {
+    pub fn new() -> Self {
+        Exp {
+            input: None,
+            output: None,
+        }
+    }
 }
 
 impl Function for Exp {
-    fn new_instance(&self, input: &Variable) -> Box<dyn Function> {
-        Box::new(Exp {
-            input: Some(Variable::new(input.data.clone())),
-        })
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Exp {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
     }
-    fn forward(&self, input: &Array<f64, IxDyn>) -> Array<f64, IxDyn> {
-        input.exp()
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.exp()]
     }
-    fn backward(&mut self, gy: &Array<f64, IxDyn>) -> Array<f64, IxDyn> {
-        let x = self.input.as_ref().unwrap();
-        x.data.exp() * gy
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.input {
+            let x = v.borrow_mut().data.clone();
+            return vec![x.exp() * &gys[0]];
+        } else {
+            return vec![];
+        }
     }
-    fn get_input(&mut self) -> Option<&mut Variable> {
-        self.input.as_mut()
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Option<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            Some(Rc::clone(v))
+        } else {
+            None
+        }
     }
 }
 
-pub fn exp(x: &Variable) -> Variable {
-    let mut f = Exp::default();
-    f.call(x)
+pub fn exp(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
+    let mut f = Exp::new();
+    f.call(&[x])
 }
 
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
     let x1 = Variable::new(x.data.clone() + eps);
-    let y0 = f.call(&x0);
-    let y1 = f.call(&x1);
-    return (y1.data - y0.data) / (eps * 2.0);
+    let y0 = f.call(&[Rc::new(RefCell::new(x0))]);
+    let y0_data = y0.get(0).unwrap().borrow_mut().data.clone();
+    let y1 = f.call(&[Rc::new(RefCell::new(x1))]);
+    let y1_data = y1.get(0).unwrap().borrow_mut().data.clone();
+    return (y1_data - y0_data) / (eps * 2.0);
 }
 
 #[cfg(test)]
@@ -92,24 +187,30 @@ mod tests {
         let x1 = vec![5.0, 10.0];
         let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
         let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
-        let mut f = Square::default();
-        let actual = f.call(&x2);
-        let s = actual.data.as_slice();
-        assert_eq!(expected, s.unwrap());
+        let mut f = Square::new();
+        let actual = f.call(&[Rc::new(RefCell::new(x2))]);
+        assert_eq!(1, actual.len());
+        let mut result = Vec::new();
+        let var = actual.get(0).unwrap().borrow_mut();
+        for data in var.data.clone() {
+            result.push(data);
+        }
+        assert_eq!(expected, result);
     }
 
     #[test]
     fn backward_test() {
         let x = Array1::from_vec(vec![10.0]);
-        let xv = x.clone().to_vec();
-        let expected: Vec<f64> = x.to_vec().iter().map(|x| 2.0*x).collect();
-        let mut f = Square::default();
-        let mut y = f.call(&Variable::new(x.into_dyn()));
-        let result = y.backward();
+        let expected: Vec<f64> = x.to_vec().iter().map(|x| 2.0 * x).collect();
+        let mut f = Square::new();
+        let input = Rc::new(RefCell::new(Variable::new(x.into_dyn())));
+        let y = f.call(&[input]);
+        let mut var = y.get(0).unwrap().borrow_mut();
+        let result = var.backward();
         assert_eq!(true, result.is_some());
-        let data = result.unwrap().data.as_slice();
-        assert_eq!(xv, data.unwrap());
-        let actual = result.unwrap().grad.as_slice();
-        assert_eq!(expected, actual.unwrap())
+        let binding = result.unwrap();
+        let input_var = binding.borrow_mut();
+        let grad = input_var.grad.clone().into_raw_vec_and_offset().0;
+        assert_eq!(expected, grad)
     }
 }
