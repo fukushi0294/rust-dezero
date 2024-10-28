@@ -1,8 +1,9 @@
 use crate::function::Function;
 use ndarray::{Array, IxDyn};
+use ndarray::{Dim, Dimension, IxDynImpl};
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::f64::consts::E;
+use std::fmt;
 use std::ptr;
 use std::rc::Rc;
 
@@ -21,6 +22,14 @@ impl Variable {
             retain_grad: false,
             creator: None,
         };
+    }
+
+    pub fn ndim(&self) -> Dim<IxDynImpl> {
+        self.data.dim()
+    }
+    
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 
     pub fn set_creator(&mut self, creator: Rc<dyn Function>) {
@@ -92,5 +101,11 @@ impl Clone for Variable {
             retain_grad: self.retain_grad,
             creator: None,
         };
+    }
+}
+
+impl fmt::Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Variable({}", self.data)
     }
 }
