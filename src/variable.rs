@@ -1,14 +1,12 @@
 use crate::function::{self, Function};
 use ndarray::{Array, IxDyn};
-use ndarray::{Dim, Dimension, IxDynImpl};
+use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
 use std::fmt;
-use std::ops::Add;
-use std::process::Output;
+use std::ops::{Add, Mul};
 use std::ptr;
 use std::rc::Rc;
-use std::sync::mpsc::RecvTimeoutError;
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
@@ -131,6 +129,15 @@ impl Add for PlaceHolder {
     fn add(self, rhs: Self) -> Self {
         let args = self.concat(rhs);
         let mut operator = function::Add::new();
+        operator.apply(args)
+    }
+}
+
+impl Mul for PlaceHolder {
+    type Output = PlaceHolder;
+    fn mul(self, rhs: Self) -> Self::Output {
+        let args = self.concat(rhs);
+        let mut operator = function::Mul::new();
         operator.apply(args)
     }
 }

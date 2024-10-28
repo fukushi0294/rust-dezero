@@ -229,6 +229,69 @@ impl Function for Add {
     }
 }
 
+pub struct Mul {
+    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Mul {
+    pub fn new() -> Self {
+        Mul {
+            input: (None, None),
+            output: None,
+        }
+    }
+}
+
+impl Function for Mul {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x1 = inputs.get(0).unwrap().clone();
+        let x2 = inputs.get(1).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Mul {
+            input: (Some(x1), Some(x2)),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 2, "inputs slice size must be 2");
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        vec![x1 * x2]
+    }
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if self.input.0.is_some() && self.input.1.is_some() {
+            let x1 = self.input.0.clone().unwrap().borrow_mut().data.clone();
+            let x2 = self.input.1.clone().unwrap().borrow_mut().data.clone();
+            vec![gys[0].clone() * x1, gys[0].clone() * x2];
+        }
+        vec![]
+        
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if self.input.0.is_some() && self.input.1.is_some() {
+            let x1 = &self.input.0.clone().unwrap();
+            let x2 = &self.input.1.clone().unwrap();
+            vec![Rc::clone(x1), Rc::clone(x2)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
