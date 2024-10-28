@@ -1,11 +1,14 @@
-use crate::function::Function;
+use crate::function::{self, Function};
 use ndarray::{Array, IxDyn};
 use ndarray::{Dim, Dimension, IxDynImpl};
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
 use std::fmt;
+use std::ops::Add;
+use std::process::Output;
 use std::ptr;
 use std::rc::Rc;
+use std::sync::mpsc::RecvTimeoutError;
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
@@ -27,7 +30,7 @@ impl Variable {
     pub fn ndim(&self) -> Dim<IxDynImpl> {
         self.data.dim()
     }
-    
+
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -38,6 +41,12 @@ impl Variable {
 
     pub fn cleargrad(&mut self) {
         self.grad = None
+    }
+
+    pub fn to_placeholder(&self) -> PlaceHolder {
+        PlaceHolder {
+            content: vec![Rc::new(RefCell::new(self.clone()))],
+        }
     }
 
     pub fn backward(&mut self) -> Option<Rc<RefCell<Variable>>> {
@@ -90,6 +99,49 @@ impl Variable {
             }
         }
         None
+    }
+}
+
+pub struct PlaceHolder {
+    pub content: Vec<Rc<RefCell<Variable>>>,
+}
+
+impl PlaceHolder {
+    pub fn len(&self) -> usize {
+        self.content.len()
+    }
+
+    pub fn concat(&self, other: PlaceHolder) -> PlaceHolder {
+        let mut content = self.clone().content;
+        for c in other.content.iter() {
+            content.push(c.clone());
+        }
+        PlaceHolder { content }
+    }
+
+    pub fn get(&self, index: usize) -> RefMut<Variable> {
+        let content = self.content.get(index);
+        assert!(&content.is_some(), "content does'nt exist.");
+        content.unwrap().borrow_mut()
+    }
+}
+
+impl Add for PlaceHolder {
+    type Output = PlaceHolder;
+    fn add(self, rhs: Self) -> Self {
+        let args = self.concat(rhs);
+        let mut operator = function::Add::new();
+        operator.apply(args)
+    }
+}
+
+impl Clone for PlaceHolder {
+    fn clone(&self) -> Self {
+        let mut output = Vec::new();
+        for c in self.content.iter() {
+            output.push(c.clone());
+        }
+        PlaceHolder { content: output }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::variable::Variable;
+use crate::variable::{PlaceHolder, Variable};
 use crate::config::CONFIG;
 use ndarray::{Array, IxDyn};
 use std::cell::{Ref, RefCell, RefMut};
@@ -28,6 +28,12 @@ pub trait Function {
             }
         }
         outputs
+    }
+
+    fn apply(&mut self, inputs: PlaceHolder) -> PlaceHolder {
+        PlaceHolder { 
+            content: self.call(&inputs.content)
+        }
     }
     fn new_instance(
         &self,
@@ -166,7 +172,7 @@ pub fn exp(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
     f.call(&[x])
 }
 
-struct Add {
+pub struct Add {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
 }
