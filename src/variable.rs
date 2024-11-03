@@ -4,7 +4,7 @@ use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
 use std::fmt;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::ptr;
 use std::rc::Rc;
 
@@ -142,6 +142,32 @@ impl Mul for PlaceHolder {
     }
 }
 
+impl Sub for PlaceHolder {
+    type Output = PlaceHolder;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let args = self.concat(rhs);
+        let mut operator = function::Sub::new();
+        operator.apply(args)
+    }
+}
+
+impl Div for PlaceHolder {
+    type Output = PlaceHolder;
+    fn div(self, rhs: Self) -> Self::Output {
+        let args = self.concat(rhs);
+        let mut operator = function::Div::new();
+        operator.apply(args)
+    }
+}
+
+impl Neg for PlaceHolder {
+    type Output = PlaceHolder;
+    fn neg(self) -> Self::Output {
+        let mut operator = function::Sub::new();
+        operator.apply(self)
+    }
+}
+
 impl Clone for PlaceHolder {
     fn clone(&self) -> Self {
         let mut output = Vec::new();
@@ -166,5 +192,48 @@ impl Clone for Variable {
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Variable({}", self.data)
+    }
+}
+
+impl Add for Variable {
+    type Output = PlaceHolder;
+    fn add(self, rhs: Self) -> Self::Output {
+        let x1 = self.to_placeholder();
+        let x2 = rhs.to_placeholder();
+        x1.add(x2)
+    }
+}
+
+impl Mul for Variable {
+    type Output = PlaceHolder;
+    fn mul(self, rhs: Self) -> Self::Output {
+        let x1 = self.to_placeholder();
+        let x2 = rhs.to_placeholder();
+        x1.mul(x2)
+    }
+}
+
+impl Div for Variable {
+    type Output = PlaceHolder;
+    fn div(self, rhs: Self) -> Self::Output {
+        let x1 = self.to_placeholder();
+        let x2 = rhs.to_placeholder();
+        x1.div(x2)
+    }
+}
+
+impl Sub for Variable {
+    type Output = PlaceHolder;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let x1 = self.to_placeholder();
+        let x2 = rhs.to_placeholder();
+        x1.sub(x2)
+    }
+}
+
+impl Neg for Variable {
+    type Output = PlaceHolder;
+    fn neg(self) -> Self::Output {
+        self.to_placeholder().neg()
     }
 }
