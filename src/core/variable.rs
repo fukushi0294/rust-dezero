@@ -1,4 +1,4 @@
-use crate::function::{self, Function};
+use crate::core::function::{self, Function};
 use ndarray::{Array, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};

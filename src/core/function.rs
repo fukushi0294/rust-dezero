@@ -1,8 +1,9 @@
-use crate::config::CONFIG;
-use crate::variable::{PlaceHolder, Variable};
+use crate::core::config::CONFIG;
+use crate::core::variable::{PlaceHolder, Variable};
 use ndarray::{Array, IxDyn};
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::{Rc, Weak};
+use std::cell::RefCell;
+use std::i32;
+use std::rc::Rc;
 
 pub trait Function {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
@@ -465,6 +466,68 @@ impl Function for Neg {
         }
     }
 }
+
+pub struct Pow {
+    input: Option<Rc<RefCell<Variable>>>,
+    factor: i32,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Pow {
+    pub fn new(factor: i32) -> Self {
+        Pow {
+            input: None,
+            factor,
+            output: None,
+        }
+    }
+}
+
+impl Function for Pow {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Pow {
+            input: Some(x),
+            factor: self.factor,
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.powi(self.factor)]
+    }
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.input {
+            let x = v.borrow_mut().data.clone();
+            return vec![self.factor as f64 * x.powi(self.factor -1) * gys[0].clone()];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
 
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
