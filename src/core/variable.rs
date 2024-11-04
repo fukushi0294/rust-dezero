@@ -2,8 +2,9 @@ use crate::core::function::{self, Function};
 use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::ptr;
 use std::rc::Rc;
@@ -70,7 +71,7 @@ impl Variable {
         if self.grad.is_none() {
             self.grad = Some(Array::ones(self.data.shape()))
         }
-        let mut functions = VecDeque::new();
+        let mut functions = FunctionQueue::new();
         if let Some(creator) = self.creator.as_mut() {
             functions.push_back(creator.clone());
         }
@@ -107,12 +108,68 @@ impl Variable {
                         let tmp = &vref.grad.clone().unwrap();
                         vref.grad = Some(tmp + gx);
                     }
-                    if let Some(creator) = vref.creator.as_mut() {
-                        functions.push_back(creator.clone());
+                    if let Some(creator) = vref.creator.as_ref() {
+                        if !functions.contains(creator.clone()) {
+                            functions.push_back(creator.clone());
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+struct FuncPtr(*const ());
+
+impl FuncPtr {
+    fn new(rc: &Rc<dyn Function>) -> Self {
+        FuncPtr(Rc::as_ptr(rc) as *const ())
+    }
+}
+
+impl PartialEq for FuncPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for FuncPtr {}
+
+impl Hash for FuncPtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+struct FunctionQueue {
+    queue: VecDeque<Rc<dyn Function>>,
+    set: HashSet<FuncPtr>,
+}
+
+impl FunctionQueue {
+    pub fn new() -> Self {
+        FunctionQueue {
+            queue: VecDeque::new(),
+            set: HashSet::new(),
+        }
+    }
+
+    pub fn contains(&self, f: Rc<dyn Function>) -> bool {
+        let ptr = FuncPtr::new(&f);
+        self.set.contains(&ptr)
+    }
+
+    pub fn pop_front(&mut self) -> Option<Rc<dyn Function>> {
+        let f = self.queue.pop_front();
+        if let Some(frc) = f.clone() {
+            self.set.remove(&FuncPtr::new(&frc));
+        }
+        f
+    }
+
+    pub fn push_back(&mut self, f: Rc<dyn Function>) {
+        self.set.insert(FuncPtr::new(&f));
+        self.queue.push_back(f);
     }
 }
 

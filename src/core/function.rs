@@ -61,28 +61,6 @@ impl Blanch {
 }
 
 impl Function for Blanch {
-    fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
-        let mut x = Vec::new();
-        for v in inputs.iter() {
-            let var = v.borrow_mut().clone();
-            x.push(var.data.clone());
-        }
-        let ys = self.forward(x.as_slice());
-        let mut outputs = Vec::new();
-        let mut refs = Vec::new();
-        for y in ys {
-            let output_ref = Rc::new(RefCell::new(Variable::new(y)));
-            refs.push(output_ref.clone());
-            outputs.push(output_ref);
-        }
-
-        if CONFIG.lock().unwrap().enable_backprop {
-            let function_node = self.new_instance(inputs, &refs);
-            outputs.get(0).unwrap().borrow_mut().creator = Some(function_node.clone());
-        }
-        outputs
-    }
-
     fn new_instance(
         &self,
         inputs: &[Rc<RefCell<Variable>>],
