@@ -33,6 +33,16 @@ impl Variable {
         self.data.len()
     }
 
+    pub fn exp(&self) -> PlaceHolder {
+        let arg = self.to_placeholder();
+        arg.exp()
+    }
+
+    pub fn powi(&self, factor: i32) -> PlaceHolder {
+        let arg = self.to_placeholder();
+        arg.powi(factor)
+    }
+
     pub fn set_creator(&mut self, creator: Rc<dyn Function>) {
         self.creator = Some(creator);
     }
@@ -121,6 +131,16 @@ impl PlaceHolder {
         let content = self.content.get(index);
         assert!(&content.is_some(), "content does'nt exist.");
         content.unwrap().borrow_mut()
+    }
+
+    pub fn exp(&self) -> PlaceHolder {
+        let mut operator = function::Exp::new();
+        operator.apply(self.clone())
+    }
+
+    pub fn powi(&self, factor: i32) -> PlaceHolder {
+        let mut operator = function::Pow::new(factor);
+        operator.apply(self.clone())
     }
 }
 
