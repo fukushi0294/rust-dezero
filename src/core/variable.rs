@@ -25,7 +25,7 @@ impl Variable {
         };
     }
 
-    pub fn from_vec1(v: Vec<f64>) -> Self{
+    pub fn from_vec1(v: Vec<f64>) -> Self {
         Variable {
             data: Array1::from_vec(v).into_dyn(),
             grad: None,
@@ -66,7 +66,7 @@ impl Variable {
         }
     }
 
-    pub fn backward(&mut self) -> Option<Rc<RefCell<Variable>>> {
+    pub fn backward(&mut self) {
         if self.grad.is_none() {
             self.grad = Some(Array::ones(self.data.shape()))
         }
@@ -109,13 +109,10 @@ impl Variable {
                     }
                     if let Some(creator) = vref.creator.as_mut() {
                         functions.push_back(creator.clone());
-                    } else {
-                        return Some(Rc::clone(var));
                     }
                 }
             }
         }
-        None
     }
 }
 
@@ -159,6 +156,26 @@ impl VarNode {
     pub fn powi(&self, factor: i32) -> VarNode {
         let mut operator = function::Pow::new(factor);
         operator.apply(self.clone())
+    }
+
+    pub fn duplicate(&self) -> VarNode {
+        let mut operator = function::Blanch::new();
+        assert!(self.content.len() == 1);
+        operator.apply(self.clone())
+    }
+
+    pub fn blanch(&self) -> (VarNode, VarNode) {
+        let node = self.duplicate();
+        let content1 = node.content.get(0).unwrap().clone();
+        let content2 = node.content.get(1).unwrap().clone();
+        (
+            VarNode {
+                content: vec![content1],
+            },
+            VarNode {
+                content: vec![content2],
+            },
+        )
     }
 }
 

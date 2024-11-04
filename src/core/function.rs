@@ -46,6 +46,85 @@ pub trait Function {
     fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
 }
 
+pub struct Blanch {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+}
+
+impl Blanch {
+    pub fn new() -> Self {
+        Blanch {
+            input: None,
+            output: (None, None),
+        }
+    }
+}
+
+impl Function for Blanch {
+    fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
+        let mut x = Vec::new();
+        for v in inputs.iter() {
+            let var = v.borrow_mut().clone();
+            x.push(var.data.clone());
+        }
+        let ys = self.forward(x.as_slice());
+        let mut outputs = Vec::new();
+        let mut refs = Vec::new();
+        for y in ys {
+            let output_ref = Rc::new(RefCell::new(Variable::new(y)));
+            refs.push(output_ref.clone());
+            outputs.push(output_ref);
+        }
+
+        if CONFIG.lock().unwrap().enable_backprop {
+            let function_node = self.new_instance(inputs, &refs);
+            outputs.get(0).unwrap().borrow_mut().creator = Some(function_node.clone());
+        }
+        outputs
+    }
+
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y1 = outputs.get(0).unwrap().clone();
+        let y2 = outputs.get(1).unwrap().clone();
+        let f = Blanch {
+            input: Some(x),
+            output: (Some(y1), Some(y2)),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x1 = inputs[0].clone();
+        let x2 = inputs[0].clone();
+        vec![x1, x2]
+    }
+    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(gys.len() == 2, "inputs slice size must be 2");
+        return vec![gys[0].clone() + gys[1].clone()];
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if self.output.0.is_some() && self.output.1.is_some() {
+            let y1 = &self.output.0.clone().unwrap();
+            let y2 = &self.output.1.clone().unwrap();
+            vec![Rc::clone(y1), Rc::clone(y2)]
+        } else {
+            vec![]
+        }
+    }
+}
+
 pub struct Square {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -507,7 +586,7 @@ impl Function for Pow {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
             let x = v.borrow_mut().data.clone();
-            return vec![self.factor as f64 * x.powi(self.factor -1) * gys[0].clone()];
+            return vec![self.factor as f64 * x.powi(self.factor - 1) * gys[0].clone()];
         } else {
             return vec![];
         }
@@ -527,7 +606,6 @@ impl Function for Pow {
         }
     }
 }
-
 
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
@@ -564,39 +642,42 @@ mod tests {
     }
 
     #[test]
+    fn same_var_test() {
+        let x = Variable::from_vec1(vec![3.0]).to_node();
+        let mut add = Add::new();
+        let y = add.apply(x.clone().concat(x.clone()));
+        y.get(0).backward();
+        let grad = x.get_grad_as_vec(0);
+        assert_eq!(vec![2.0], grad)
+    }
+
+    #[test]
     fn backward_test() {
-        let x = Array1::from_vec(vec![10.0]);
-        let expected: Vec<f64> = x.to_vec().iter().map(|x| 2.0 * x).collect();
+        let input = vec![10.0];
+        let x = Variable::from_vec1(input.clone()).to_node();
+        let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
-        let input = Rc::new(RefCell::new(Variable::new(x.into_dyn())));
-        let y = f.call(&[input]);
-        let mut var = y.get(0).unwrap().borrow_mut();
-        let result = var.backward();
-        assert_eq!(true, result.is_some());
-        let binding = result.unwrap();
-        let input_var = binding.borrow_mut();
-        let grad = input_var.grad.clone().unwrap().into_raw_vec_and_offset().0;
+        let output = f.apply(x.clone());
+        let mut y = output.get(0);
+        y.backward();
+        let grad = x.get_grad_as_vec(0);
         assert_eq!(expected, grad)
     }
 
     #[test]
     fn calc_graph_test() {
-        let x = Variable::new(Array1::from_vec(vec![2.0]).into_dyn());
-        let x = Rc::new(RefCell::new(x));
+        let x = Variable::from_vec1(vec![2.0]).to_node();
         let mut square = Square::new();
         let mut add = Add::new();
-        let a = square.call(&[x]);
-        let a1 = square.call(&a);
-        let a2 = square.call(&a);
-        let a1_ = a1.get(0).unwrap().clone();
-        let a2_ = a2.get(0).unwrap().clone();
-        let binding = add.call(&[a1_, a2_]);
-        let mut y = binding.get(0).unwrap().borrow_mut();
-        assert_eq!(vec![32.0], y.data.clone().into_raw_vec_and_offset().0);
-        let result = y.backward();
-        let binding = result.unwrap();
-        let input_var = binding.borrow_mut();
-        let grad = input_var.grad.clone().unwrap().into_raw_vec_and_offset().0;
+        let a = square.apply(x.clone());
+        let (a1, a2) = a.blanch();
+        let a1 = square.apply(a1);
+        let a2 = square.apply(a2);
+        let binding = add.apply(a1.concat(a2));
+        let mut y = binding.get(0);
+        y.backward();
+        println!("{}", y.data);
+        let grad = x.get_grad_as_vec(0);
         assert_eq!(vec![64.0], grad)
     }
 
