@@ -326,9 +326,10 @@ impl Function for Mul {
         if self.input.0.is_some() && self.input.1.is_some() {
             let x1 = self.input.0.clone().unwrap().borrow_mut().data.clone();
             let x2 = self.input.1.clone().unwrap().borrow_mut().data.clone();
-            vec![gys[0].clone() * x1, gys[0].clone() * x2];
+            vec![gys[0].clone() * x2, gys[0].clone() * x1]
+        } else {
+            vec![]
         }
-        vec![]
     }
     fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
         if self.input.0.is_some() && self.input.1.is_some() {
@@ -381,7 +382,7 @@ impl Function for Sub {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x1 = inputs[0].clone();
         let x2 = inputs[1].clone();
-        vec![x1 + x2]
+        vec![x1 - x2]
     }
     fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
@@ -489,7 +490,7 @@ impl Function for Neg {
     ) -> Rc<dyn Function> {
         let x = inputs.get(0).unwrap().clone();
         let y = outputs.get(0).unwrap().clone();
-        let f = Exp {
+        let f = Neg {
             input: Some(x),
             output: Some(y),
         };

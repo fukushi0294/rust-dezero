@@ -245,38 +245,30 @@ impl Add for VarNode {
     }
 }
 
-impl Mul<f64> for VarNode {
-    type Output = VarNode;
-    fn mul(self, rhs: f64) -> Self::Output {
-        let vars = self.content;
-        let mut output = Vec::new();
-        for var in vars.iter() {
-            var.borrow_mut().data *= rhs;
-            output.push(var.clone());
-        }
-        VarNode { content: output }
-    }
-}
-
-impl Mul<VarNode> for f64 {
-    type Output = VarNode;
-    fn mul(self, rhs: VarNode) -> Self::Output {
-        let vars = rhs.content;
-        let mut output = Vec::new();
-        for var in vars.iter() {
-            var.borrow_mut().data *= self;
-            output.push(var.clone());
-        }
-        VarNode { content: output }
-    }
-}
-
 impl Mul for VarNode {
     type Output = VarNode;
     fn mul(self, rhs: Self) -> Self::Output {
         let args = self.concat(rhs);
         let mut operator = function::Mul::new();
         operator.apply(args)
+    }
+}
+
+impl Mul<f64> for VarNode {
+    type Output = VarNode;
+    fn mul(self, rhs: f64) -> Self::Output {
+        let dim = self.content.get(0).unwrap().borrow().data.raw_dim();
+        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        self * rhs
+    }
+}
+
+impl Mul<VarNode> for f64 {
+    type Output = VarNode;
+    fn mul(self, rhs: VarNode) -> Self::Output {
+        let dim = rhs.content.get(0).unwrap().borrow().data.raw_dim();
+        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        rhs * lhs
     }
 }
 
