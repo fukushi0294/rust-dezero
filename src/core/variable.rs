@@ -1,5 +1,5 @@
 use crate::core::function::{self, Function};
-use ndarray::{Array, Array1, Array2, IxDyn};
+use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
@@ -185,6 +185,32 @@ impl Add for VarNode {
         let args = self.concat(rhs);
         let mut operator = function::Add::new();
         operator.apply(args)
+    }
+}
+
+impl Mul<f64> for VarNode {
+    type Output = VarNode;
+    fn mul(self, rhs: f64) -> Self::Output {
+        let vars = self.content;
+        let mut output = Vec::new();
+        for var in vars.iter() {
+            var.borrow_mut().data *= rhs;
+            output.push(var.clone());
+        }
+        VarNode { content: output }
+    }
+}
+
+impl Mul<VarNode> for f64 {
+    type Output = VarNode;
+    fn mul(self, rhs: VarNode) -> Self::Output {
+        let vars = rhs.content;
+        let mut output = Vec::new();
+        for var in vars.iter() {
+            var.borrow_mut().data *= self;
+            output.push(var.clone());
+        }
+        VarNode { content: output }
     }
 }
 
