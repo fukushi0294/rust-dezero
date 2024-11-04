@@ -1,5 +1,5 @@
 use crate::core::config::CONFIG;
-use crate::core::variable::{PlaceHolder, Variable};
+use crate::core::variable::{VarNode, Variable};
 use ndarray::{Array, IxDyn};
 use std::cell::RefCell;
 use std::i32;
@@ -30,8 +30,8 @@ pub trait Function {
         outputs
     }
 
-    fn apply(&mut self, inputs: PlaceHolder) -> PlaceHolder {
-        PlaceHolder {
+    fn apply(&mut self, inputs: VarNode) -> VarNode {
+        VarNode {
             content: self.call(&inputs.content),
         }
     }

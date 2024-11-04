@@ -1,5 +1,5 @@
 use crate::core::function::{self, Function};
-use ndarray::{Array, IxDyn};
+use ndarray::{Array, Array1, Array2, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
 use std::collections::VecDeque;
@@ -25,6 +25,15 @@ impl Variable {
         };
     }
 
+    pub fn from_vec1(v: Vec<f64>) -> Self{
+        Variable {
+            data: Array1::from_vec(v).into_dyn(),
+            grad: None,
+            retain_grad: false,
+            creator: None,
+        }
+    }
+
     pub fn ndim(&self) -> Dim<IxDynImpl> {
         self.data.dim()
     }
@@ -33,13 +42,13 @@ impl Variable {
         self.data.len()
     }
 
-    pub fn exp(&self) -> PlaceHolder {
-        let arg = self.to_placeholder();
+    pub fn exp(&self) -> VarNode {
+        let arg = self.to_node();
         arg.exp()
     }
 
-    pub fn powi(&self, factor: i32) -> PlaceHolder {
-        let arg = self.to_placeholder();
+    pub fn powi(&self, factor: i32) -> VarNode {
+        let arg = self.to_node();
         arg.powi(factor)
     }
 
@@ -51,8 +60,8 @@ impl Variable {
         self.grad = None
     }
 
-    pub fn to_placeholder(&self) -> PlaceHolder {
-        PlaceHolder {
+    pub fn to_node(&self) -> VarNode {
+        VarNode {
             content: vec![Rc::new(RefCell::new(self.clone()))],
         }
     }
@@ -110,21 +119,21 @@ impl Variable {
     }
 }
 
-pub struct PlaceHolder {
+pub struct VarNode {
     pub content: Vec<Rc<RefCell<Variable>>>,
 }
 
-impl PlaceHolder {
+impl VarNode {
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
-    pub fn concat(&self, other: PlaceHolder) -> PlaceHolder {
+    pub fn concat(&self, other: VarNode) -> VarNode {
         let mut content = self.clone().content;
         for c in other.content.iter() {
             content.push(c.clone());
         }
-        PlaceHolder { content }
+        VarNode { content }
     }
 
     pub fn get(&self, index: usize) -> RefMut<Variable> {
@@ -133,19 +142,28 @@ impl PlaceHolder {
         content.unwrap().borrow_mut()
     }
 
-    pub fn exp(&self) -> PlaceHolder {
+    pub fn get_grad_as_vec(&self, index: usize) -> Vec<f64> {
+        let var = self.get(index);
+        if let Some(grad) = &var.grad {
+            grad.clone().into_raw_vec_and_offset().0
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn exp(&self) -> VarNode {
         let mut operator = function::Exp::new();
         operator.apply(self.clone())
     }
 
-    pub fn powi(&self, factor: i32) -> PlaceHolder {
+    pub fn powi(&self, factor: i32) -> VarNode {
         let mut operator = function::Pow::new(factor);
         operator.apply(self.clone())
     }
 }
 
-impl Add for PlaceHolder {
-    type Output = PlaceHolder;
+impl Add for VarNode {
+    type Output = VarNode;
     fn add(self, rhs: Self) -> Self {
         let args = self.concat(rhs);
         let mut operator = function::Add::new();
@@ -153,8 +171,8 @@ impl Add for PlaceHolder {
     }
 }
 
-impl Mul for PlaceHolder {
-    type Output = PlaceHolder;
+impl Mul for VarNode {
+    type Output = VarNode;
     fn mul(self, rhs: Self) -> Self::Output {
         let args = self.concat(rhs);
         let mut operator = function::Mul::new();
@@ -162,8 +180,8 @@ impl Mul for PlaceHolder {
     }
 }
 
-impl Sub for PlaceHolder {
-    type Output = PlaceHolder;
+impl Sub for VarNode {
+    type Output = VarNode;
     fn sub(self, rhs: Self) -> Self::Output {
         let args = self.concat(rhs);
         let mut operator = function::Sub::new();
@@ -171,8 +189,8 @@ impl Sub for PlaceHolder {
     }
 }
 
-impl Div for PlaceHolder {
-    type Output = PlaceHolder;
+impl Div for VarNode {
+    type Output = VarNode;
     fn div(self, rhs: Self) -> Self::Output {
         let args = self.concat(rhs);
         let mut operator = function::Div::new();
@@ -180,21 +198,21 @@ impl Div for PlaceHolder {
     }
 }
 
-impl Neg for PlaceHolder {
-    type Output = PlaceHolder;
+impl Neg for VarNode {
+    type Output = VarNode;
     fn neg(self) -> Self::Output {
         let mut operator = function::Sub::new();
         operator.apply(self)
     }
 }
 
-impl Clone for PlaceHolder {
+impl Clone for VarNode {
     fn clone(&self) -> Self {
         let mut output = Vec::new();
         for c in self.content.iter() {
             output.push(c.clone());
         }
-        PlaceHolder { content: output }
+        VarNode { content: output }
     }
 }
 
@@ -216,44 +234,44 @@ impl fmt::Display for Variable {
 }
 
 impl Add for Variable {
-    type Output = PlaceHolder;
+    type Output = VarNode;
     fn add(self, rhs: Self) -> Self::Output {
-        let x1 = self.to_placeholder();
-        let x2 = rhs.to_placeholder();
+        let x1 = self.to_node();
+        let x2 = rhs.to_node();
         x1.add(x2)
     }
 }
 
 impl Mul for Variable {
-    type Output = PlaceHolder;
+    type Output = VarNode;
     fn mul(self, rhs: Self) -> Self::Output {
-        let x1 = self.to_placeholder();
-        let x2 = rhs.to_placeholder();
+        let x1 = self.to_node();
+        let x2 = rhs.to_node();
         x1.mul(x2)
     }
 }
 
 impl Div for Variable {
-    type Output = PlaceHolder;
+    type Output = VarNode;
     fn div(self, rhs: Self) -> Self::Output {
-        let x1 = self.to_placeholder();
-        let x2 = rhs.to_placeholder();
+        let x1 = self.to_node();
+        let x2 = rhs.to_node();
         x1.div(x2)
     }
 }
 
 impl Sub for Variable {
-    type Output = PlaceHolder;
+    type Output = VarNode;
     fn sub(self, rhs: Self) -> Self::Output {
-        let x1 = self.to_placeholder();
-        let x2 = rhs.to_placeholder();
+        let x1 = self.to_node();
+        let x2 = rhs.to_node();
         x1.sub(x2)
     }
 }
 
 impl Neg for Variable {
-    type Output = PlaceHolder;
+    type Output = VarNode;
     fn neg(self) -> Self::Output {
-        self.to_placeholder().neg()
+        self.to_node().neg()
     }
 }
