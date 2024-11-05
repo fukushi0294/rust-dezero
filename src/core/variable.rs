@@ -1,4 +1,4 @@
-use crate::core::function::{self, Function};
+use crate::core::function::{self, BiFunction, Function, UniFunction};
 use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
@@ -63,7 +63,7 @@ impl Variable {
 
     pub fn to_node(&self) -> VarNode {
         VarNode {
-            content: vec![Rc::new(RefCell::new(self.clone()))],
+            content: Rc::new(RefCell::new(self.clone())),
         }
     }
 
@@ -82,9 +82,7 @@ impl Variable {
             for output in f.get_outputs().iter_mut() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
-                    for c in self.grad.clone().unwrap().content.iter() {
-                        gys.push(c.borrow().data.clone());
-                    }
+                    gys.push(self.grad.clone().unwrap().content.borrow().data.clone());
                 } else {
                     let mut v_ref = output.borrow_mut();
                     let grad = v_ref.grad.clone();
@@ -94,9 +92,7 @@ impl Variable {
                     if grad.is_none() {
                         gys.push(Array::ones(v_ref.data.shape()));
                     } else {
-                        for c in grad.unwrap().content.iter() {
-                            gys.push(c.borrow().data.clone());
-                        }
+                        gys.push(grad.unwrap().content.borrow().data.clone());
                     };
                 }
             }
@@ -179,39 +175,23 @@ impl FunctionQueue {
 }
 
 pub struct VarNode {
-    pub content: Vec<Rc<RefCell<Variable>>>,
+    pub content: Rc<RefCell<Variable>>,
 }
 
 impl VarNode {
-    pub fn len(&self) -> usize {
-        self.content.len()
+    pub fn extract(&self) -> RefMut<Variable> {
+        self.content.borrow_mut()
     }
 
-    pub fn concat(&self, other: VarNode) -> VarNode {
-        let mut content = self.clone().content;
-        for c in other.content.iter() {
-            content.push(c.clone());
-        }
-        VarNode { content }
-    }
-
-    pub fn get(&self, index: usize) -> RefMut<Variable> {
-        let content = self.content.get(index);
-        assert!(&content.is_some(), "content does'nt exist.");
-        content.unwrap().borrow_mut()
-    }
-
-    pub fn get_grad_as_vec(&self, index: usize) -> Vec<f64> {
-        let var = self.get(index);
+    pub fn get_grad_vec(&self) -> Vec<f64> {
+        let var = self.extract();
         if let Some(grad) = &var.grad {
-            let mut v = Vec::new();
-            for c in grad.content.iter() {
-                let tmp = c.borrow().data.clone().into_raw_vec_and_offset().0;
-                for t in tmp {
-                    v.push(t);
-                }
-            }
-            v
+            grad.content
+                .borrow()
+                .data
+                .clone()
+                .into_raw_vec_and_offset()
+                .0
         } else {
             vec![]
         }
@@ -227,49 +207,32 @@ impl VarNode {
         operator.apply(self.clone())
     }
 
-    pub fn duplicate(&self) -> VarNode {
-        let mut operator = function::Blanch::new();
-        assert!(self.content.len() == 1);
-        operator.apply(self.clone())
-    }
-
     pub fn blanch(&self) -> (VarNode, VarNode) {
-        let node = self.duplicate();
-        let content1 = node.content.get(0).unwrap().clone();
-        let content2 = node.content.get(1).unwrap().clone();
-        (
-            VarNode {
-                content: vec![content1],
-            },
-            VarNode {
-                content: vec![content2],
-            },
-        )
+        let mut operator = function::Blanch::new();
+        operator.apply(self.clone())
     }
 }
 
 impl Add for VarNode {
     type Output = VarNode;
     fn add(self, rhs: Self) -> Self {
-        let args = self.concat(rhs);
         let mut operator = function::Add::new();
-        operator.apply(args)
+        operator.apply(self, rhs)
     }
 }
 
 impl Mul for VarNode {
     type Output = VarNode;
     fn mul(self, rhs: Self) -> Self::Output {
-        let args = self.concat(rhs);
         let mut operator = function::Mul::new();
-        operator.apply(args)
+        operator.apply(self, rhs)
     }
 }
 
 impl Mul<f64> for VarNode {
     type Output = VarNode;
     fn mul(self, rhs: f64) -> Self::Output {
-        let dim = self.content.get(0).unwrap().borrow().data.raw_dim();
+        let dim = self.content.borrow().data.raw_dim();
         let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self * rhs
     }
@@ -278,7 +241,7 @@ impl Mul<f64> for VarNode {
 impl Mul<VarNode> for f64 {
     type Output = VarNode;
     fn mul(self, rhs: VarNode) -> Self::Output {
-        let dim = rhs.content.get(0).unwrap().borrow().data.raw_dim();
+        let dim = rhs.content.borrow().data.raw_dim();
         let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs * lhs
     }
@@ -287,36 +250,32 @@ impl Mul<VarNode> for f64 {
 impl Sub for VarNode {
     type Output = VarNode;
     fn sub(self, rhs: Self) -> Self::Output {
-        let args = self.concat(rhs);
         let mut operator = function::Sub::new();
-        operator.apply(args)
+        operator.apply(self, rhs)
     }
 }
 
 impl Div for VarNode {
     type Output = VarNode;
     fn div(self, rhs: Self) -> Self::Output {
-        let args = self.concat(rhs);
         let mut operator = function::Div::new();
-        operator.apply(args)
+        operator.apply(self, rhs)
     }
 }
 
 impl Neg for VarNode {
     type Output = VarNode;
     fn neg(self) -> Self::Output {
-        let mut operator = function::Sub::new();
+        let mut operator = function::Neg::new();
         operator.apply(self)
     }
 }
 
 impl Clone for VarNode {
     fn clone(&self) -> Self {
-        let mut output = Vec::new();
-        for c in self.content.iter() {
-            output.push(c.clone());
+        VarNode {
+            content: self.content.clone(),
         }
-        VarNode { content: output }
     }
 }
 

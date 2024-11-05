@@ -29,12 +29,6 @@ pub trait Function {
         }
         outputs
     }
-
-    fn apply(&mut self, inputs: VarNode) -> VarNode {
-        VarNode {
-            content: self.call(&inputs.content),
-        }
-    }
     fn new_instance(
         &self,
         inputs: &[Rc<RefCell<Variable>>],
@@ -44,6 +38,24 @@ pub trait Function {
     fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
     fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
     fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+}
+
+pub trait UniFunction: Function {
+    fn apply(&mut self, input: VarNode) -> VarNode {
+        let output = self.call(&[input.content]);
+        VarNode {
+            content: output.get(0).unwrap().clone(),
+        }
+    }
+}
+
+pub trait BiFunction: Function {
+    fn apply(&mut self, input0: VarNode, input1: VarNode) -> VarNode {
+        let output = self.call(&[input0.content, input1.content]);
+        VarNode {
+            content: output.get(0).unwrap().clone(),
+        }
+    }
 }
 
 pub struct Blanch {
@@ -57,6 +69,18 @@ impl Blanch {
             input: None,
             output: (None, None),
         }
+    }
+
+    pub fn apply(&mut self, input: VarNode) -> (VarNode, VarNode) {
+        let output = self.call(&[input.content]);
+        (
+            VarNode {
+                content: output.get(0).unwrap().clone(),
+            },
+            VarNode {
+                content: output.get(1).unwrap().clone(),
+            },
+        )
     }
 }
 
@@ -116,6 +140,8 @@ impl Square {
         }
     }
 }
+
+impl UniFunction for Square {}
 
 impl Function for Square {
     fn new_instance(
@@ -180,6 +206,8 @@ impl Exp {
     }
 }
 
+impl UniFunction for Exp {}
+
 impl Function for Exp {
     fn new_instance(
         &self,
@@ -243,6 +271,8 @@ impl Add {
     }
 }
 
+impl BiFunction for Add {}
+
 impl Function for Add {
     fn new_instance(
         &self,
@@ -299,6 +329,8 @@ impl Mul {
         }
     }
 }
+
+impl BiFunction for Mul {}
 
 impl Function for Mul {
     fn new_instance(
@@ -363,6 +395,8 @@ impl Sub {
     }
 }
 
+impl BiFunction for Sub {}
+
 impl Function for Sub {
     fn new_instance(
         &self,
@@ -419,6 +453,8 @@ impl Div {
         }
     }
 }
+
+impl BiFunction for Div {}
 
 impl Function for Div {
     fn new_instance(
@@ -482,6 +518,8 @@ impl Neg {
     }
 }
 
+impl UniFunction for Neg {}
+
 impl Function for Neg {
     fn new_instance(
         &self,
@@ -540,6 +578,8 @@ impl Pow {
         }
     }
 }
+
+impl UniFunction for Pow {}
 
 impl Function for Pow {
     fn new_instance(
@@ -624,9 +664,9 @@ mod tests {
     fn same_var_test() {
         let x = Variable::from_vec1(vec![3.0]).to_node();
         let mut add = Add::new();
-        let y = add.apply(x.clone().concat(x.clone()));
-        y.get(0).backward();
-        let grad = x.get_grad_as_vec(0);
+        let y = add.apply(x.clone(), x.clone());
+        y.extract().backward();
+        let grad = x.get_grad_vec();
         assert_eq!(vec![2.0], grad)
     }
 
@@ -637,9 +677,9 @@ mod tests {
         let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
         let output = f.apply(x.clone());
-        let mut y = output.get(0);
+        let mut y = output.extract();
         y.backward();
-        let grad = x.get_grad_as_vec(0);
+        let grad = x.get_grad_vec();
         assert_eq!(expected, grad)
     }
 
@@ -652,11 +692,11 @@ mod tests {
         let (a1, a2) = a.blanch();
         let a1 = square.apply(a1);
         let a2 = square.apply(a2);
-        let binding = add.apply(a1.concat(a2));
-        let mut y = binding.get(0);
+        let binding = add.apply(a1, a2);
+        let mut y = binding.extract();
         y.backward();
         println!("{}", y.data);
-        let grad = x.get_grad_as_vec(0);
+        let grad = x.get_grad_vec();
         assert_eq!(vec![64.0], grad)
     }
 
