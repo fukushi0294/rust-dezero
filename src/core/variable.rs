@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
-    pub grad: Option<Array<f64, IxDyn>>,
+    pub grad: Option<VarNode>,
     pub retain_grad: bool,
     pub creator: Option<Rc<dyn Function>>,
 }
@@ -69,7 +69,8 @@ impl Variable {
 
     pub fn backward(&mut self) {
         if self.grad.is_none() {
-            self.grad = Some(Array::ones(self.data.shape()))
+            let var = Variable::new(Array::ones(self.data.shape()));
+            self.grad = Some(var.to_node());
         }
         let mut functions = FunctionQueue::new();
         if let Some(creator) = self.creator.as_mut() {
@@ -81,19 +82,22 @@ impl Variable {
             for output in f.get_outputs().iter_mut() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
-                    gys.push(self.grad.clone().unwrap());
+                    for c in self.grad.clone().unwrap().content.iter() {
+                        gys.push(c.borrow().data.clone());
+                    }
                 } else {
                     let mut v_ref = output.borrow_mut();
                     let grad = v_ref.grad.clone();
                     if self.retain_grad {
                         v_ref.grad = None
                     }
-                    let grad = if grad.is_none() {
-                        Array::ones(v_ref.data.shape())
+                    if grad.is_none() {
+                        gys.push(Array::ones(v_ref.data.shape()));
                     } else {
-                        grad.clone().unwrap()
+                        for c in grad.unwrap().content.iter() {
+                            gys.push(c.borrow().data.clone());
+                        }
                     };
-                    gys.push(grad.clone());
                 }
             }
             let gxs = f.backward(&gys);
@@ -102,10 +106,11 @@ impl Variable {
             for var in vars.iter_mut() {
                 if let Some(gx) = gxs.pop_front() {
                     let mut vref = var.borrow_mut();
+                    let gx = Variable::new(gx).to_node();
                     if vref.grad.is_none() {
                         vref.grad = Some(gx)
                     } else {
-                        let tmp = &vref.grad.clone().unwrap();
+                        let tmp = vref.grad.clone().unwrap();
                         vref.grad = Some(tmp + gx);
                     }
                     if let Some(creator) = vref.creator.as_ref() {
@@ -199,7 +204,14 @@ impl VarNode {
     pub fn get_grad_as_vec(&self, index: usize) -> Vec<f64> {
         let var = self.get(index);
         if let Some(grad) = &var.grad {
-            grad.clone().into_raw_vec_and_offset().0
+            let mut v = Vec::new();
+            for c in grad.content.iter() {
+                let tmp = c.borrow().data.clone().into_raw_vec_and_offset().0;
+                for t in tmp {
+                    v.push(t);
+                }
+            }
+            v
         } else {
             vec![]
         }
