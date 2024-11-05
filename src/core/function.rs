@@ -702,18 +702,19 @@ mod tests {
 
     #[test]
     fn forward_only_test() {
-        no_grad!();
-        let x1 = vec![5.0, 10.0];
-        let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
-        let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
-        let mut f = Square::new();
-        let actual = f.call(&[Rc::new(RefCell::new(x2))]);
-        assert_eq!(1, actual.len());
-        let mut result = Vec::new();
-        let var = actual.get(0).unwrap().borrow_mut();
-        for data in var.data.clone() {
-            result.push(data);
+        no_grad! {
+            let x1 = vec![5.0, 10.0];
+            let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
+            let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
+            let mut f = Square::new();
+            let actual = f.call(&[Rc::new(RefCell::new(x2))]);
+            assert_eq!(1, actual.len());
+            let mut result = Vec::new();
+            let var = actual.get(0).unwrap().borrow_mut();
+            for data in var.data.clone() {
+                result.push(data);
+            }
+            assert_eq!(expected, result);
         }
-        assert_eq!(expected, result);
     }
 }
