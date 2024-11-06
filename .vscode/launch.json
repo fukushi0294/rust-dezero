@@ -1,0 +1,86 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'rust_dezero'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rust-dezero"
+                ],
+                "filter": {
+                    "name": "rust_dezero",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rust-dezero'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rust-dezero",
+                    "--package=rust-dezero"
+                ],
+                "filter": {
+                    "name": "rust-dezero",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'rust-dezero'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=rust-dezero",
+                    "--package=rust-dezero"
+                ],
+                "filter": {
+                    "name": "rust-dezero",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'math'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=math",
+                    "--package=rust-dezero"
+                ],
+                "filter": {
+                    "name": "math",
+                    "kind": "test"
+                }
+            },
+            "env": {
+                "RUST_BACKTRACE": "full"
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
