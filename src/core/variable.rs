@@ -2,7 +2,7 @@ use crate::core::function::{self, BiFunction, Function, UniFunction};
 use crate::enable_backprop;
 use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -190,12 +190,16 @@ pub struct VarNode {
 }
 
 impl VarNode {
-    pub fn extract(&self) -> RefMut<Variable> {
-        self.content.borrow_mut()
+    pub fn backward(&self) {
+        self.content.borrow_mut().backward()
+    }
+
+    pub fn cleargrad(&self) {
+        self.content.borrow_mut().cleargrad()
     }
 
     pub fn get_grad_vec(&self) -> Vec<f64> {
-        let var = self.extract();
+        let var = self.content.borrow();
         if let Some(grad) = &var.grad {
             grad.content
                 .borrow()

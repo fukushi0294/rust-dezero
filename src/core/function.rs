@@ -607,7 +607,7 @@ mod tests {
         let x = Variable::from_vec1(vec![3.0]).to_node();
         let mut add = Add::new();
         let y = add.apply(x.clone(), x.clone());
-        y.extract().backward();
+        y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(vec![2.0], grad)
     }
@@ -618,8 +618,7 @@ mod tests {
         let x = Variable::from_vec1(input.clone()).to_node();
         let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
-        let output = f.apply(x.clone());
-        let mut y = output.extract();
+        let y = f.apply(x.clone());
         y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(expected, grad)
@@ -634,10 +633,9 @@ mod tests {
         let (a1, a2) = (a.clone(), a.clone());
         let a1 = square.apply(a1);
         let a2 = square.apply(a2);
-        let binding = add.apply(a1, a2);
-        let mut y = binding.extract();
+        let y = add.apply(a1, a2);
         y.backward();
-        println!("{}", y.data);
+        println!("{}", y.content.borrow().data);
         let grad = x.get_grad_vec();
         assert_eq!(vec![64.0], grad)
     }
