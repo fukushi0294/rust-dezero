@@ -41,3 +41,15 @@ macro_rules! no_grad {
         $($code)*
     };
 }
+
+#[macro_export]
+macro_rules! enable_backprop {
+    {$flag:expr, $($code:tt)*} => {
+        std::hint::black_box(if !$flag {
+            Some($crate::core::config::NoGradContext::new())
+        } else {
+            None
+        });
+        $($code)*
+    };
+}

@@ -58,75 +58,6 @@ pub trait BiFunction: Function {
     }
 }
 
-pub struct Blanch {
-    input: Option<Rc<RefCell<Variable>>>,
-    output: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
-}
-
-impl Blanch {
-    pub fn new() -> Self {
-        Blanch {
-            input: None,
-            output: (None, None),
-        }
-    }
-
-    pub fn apply(&mut self, input: VarNode) -> (VarNode, VarNode) {
-        let output = self.call(&[input.content]);
-        (
-            VarNode {
-                content: output.get(0).unwrap().clone(),
-            },
-            VarNode {
-                content: output.get(1).unwrap().clone(),
-            },
-        )
-    }
-}
-
-impl Function for Blanch {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y1 = outputs.get(0).unwrap().clone();
-        let y2 = outputs.get(1).unwrap().clone();
-        let f = Blanch {
-            input: Some(x),
-            output: (Some(y1), Some(y2)),
-        };
-        Rc::new(f)
-    }
-    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
-        assert!(inputs.len() == 1, "inputs slice size must be 1");
-        let x1 = inputs[0].clone();
-        let x2 = inputs[0].clone();
-        vec![x1, x2]
-    }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
-        assert!(gys.len() == 2, "inputs slice size must be 2");
-        return vec![gys[0].clone() + gys[1].clone()];
-    }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if self.output.0.is_some() && self.output.1.is_some() {
-            let y1 = &self.output.0.clone().unwrap();
-            let y2 = &self.output.1.clone().unwrap();
-            vec![Rc::clone(y1), Rc::clone(y2)]
-        } else {
-            vec![]
-        }
-    }
-}
-
 pub struct Square {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -689,7 +620,7 @@ mod tests {
         let mut square = Square::new();
         let mut add = Add::new();
         let a = square.apply(x.clone());
-        let (a1, a2) = a.blanch();
+        let (a1, a2) = (a.clone(), a.clone());
         let a1 = square.apply(a1);
         let a2 = square.apply(a2);
         let binding = add.apply(a1, a2);

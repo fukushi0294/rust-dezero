@@ -1,4 +1,5 @@
 use crate::core::function::{self, BiFunction, Function, UniFunction};
+use crate::enable_backprop;
 use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::{RefCell, RefMut};
@@ -13,6 +14,7 @@ pub struct Variable {
     pub data: Array<f64, IxDyn>,
     pub grad: Option<VarNode>,
     pub retain_grad: bool,
+    pub create_graph: bool,
     pub creator: Option<Rc<dyn Function>>,
 }
 
@@ -22,6 +24,7 @@ impl Variable {
             data: data,
             grad: None,
             retain_grad: false,
+            create_graph: false,
             creator: None,
         };
     }
@@ -31,6 +34,7 @@ impl Variable {
             data: Array1::from_vec(v).into_dyn(),
             grad: None,
             retain_grad: false,
+            create_graph: false,
             creator: None,
         }
     }
@@ -96,26 +100,28 @@ impl Variable {
                     };
                 }
             }
-            let gxs = f.backward(&gys);
-            let mut gxs = VecDeque::from(gxs);
-            let mut vars = f.get_inputs();
-            for var in vars.iter_mut() {
-                if let Some(gx) = gxs.pop_front() {
-                    let mut vref = var.borrow_mut();
-                    let gx = Variable::new(gx).to_node();
-                    if vref.grad.is_none() {
-                        vref.grad = Some(gx)
-                    } else {
-                        let tmp = vref.grad.clone().unwrap();
-                        vref.grad = Some(tmp + gx);
-                    }
-                    if let Some(creator) = vref.creator.as_ref() {
-                        if !functions.contains(creator.clone()) {
-                            functions.push_back(creator.clone());
+            enable_backprop!(self.create_graph, {
+                let gxs = f.backward(&gys);
+                let mut gxs = VecDeque::from(gxs);
+                let mut vars = f.get_inputs();
+                for var in vars.iter_mut() {
+                    if let Some(gx) = gxs.pop_front() {
+                        let mut vref = var.borrow_mut();
+                        let gx = Variable::new(gx).to_node();
+                        if vref.grad.is_none() {
+                            vref.grad = Some(gx)
+                        } else {
+                            let tmp = vref.grad.clone().unwrap();
+                            vref.grad = Some(tmp + gx);
+                        }
+                        if let Some(creator) = vref.creator.as_ref() {
+                            if !functions.contains(creator.clone()) {
+                                functions.push_back(creator.clone());
+                            }
                         }
                     }
                 }
-            }
+            });
         }
     }
 }
@@ -206,11 +212,6 @@ impl VarNode {
         let mut operator = function::Pow::new(factor);
         operator.apply(self.clone())
     }
-
-    pub fn blanch(&self) -> (VarNode, VarNode) {
-        let mut operator = function::Blanch::new();
-        operator.apply(self.clone())
-    }
 }
 
 impl Add for VarNode {
@@ -285,6 +286,7 @@ impl Clone for Variable {
             data: self.data.clone(),
             grad: self.grad.clone(),
             retain_grad: self.retain_grad,
+            create_graph: self.create_graph,
             creator: None,
         };
     }
