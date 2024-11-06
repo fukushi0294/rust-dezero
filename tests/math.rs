@@ -32,9 +32,10 @@ mod tests {
         let mut  y = y.extract();
         y.create_graph = true;
         y.backward();
-        println!("{:?}",x.clone().get_grad_vec());
+        assert_eq!(vec![24.0], x.get_grad_vec());
         let grad_node = x.extract().grad.clone().unwrap();
-        grad_node.extract().backward();
-        println!("{:?}",grad_node.clone().get_grad_vec());
+        x.extract().cleargrad();
+        grad_node.content.borrow_mut().backward();
+        assert_eq!(vec![44.0], x.get_grad_vec())
     }
 }

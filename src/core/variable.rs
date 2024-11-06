@@ -86,7 +86,7 @@ impl Variable {
             for output in f.get_outputs().iter_mut() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
-                    gys.push(self.grad.clone().unwrap().content.borrow().data.clone());
+                    gys.push(self.grad.clone().unwrap().clone());
                 } else {
                     let mut v_ref = output.borrow_mut();
                     let grad = v_ref.grad.clone();
@@ -94,24 +94,29 @@ impl Variable {
                         v_ref.grad = None
                     }
                     if grad.is_none() {
-                        gys.push(Array::ones(v_ref.data.shape()));
+                        let var = Variable::new(Array::ones(v_ref.data.shape()));
+                        gys.push(var.to_node());
                     } else {
-                        gys.push(grad.unwrap().content.borrow().data.clone());
+                        gys.push(grad.unwrap());
                     };
                 }
             }
             enable_backprop!(self.create_graph, {
-                let gxs = f.backward(&gys);
+                let gxs = f.backward(gys);
                 let mut gxs = VecDeque::from(gxs);
                 let mut vars = f.get_inputs();
                 for var in vars.iter_mut() {
                     if let Some(gx) = gxs.pop_front() {
                         let mut vref = var.borrow_mut();
-                        let gx = Variable::new(gx).to_node();
                         if vref.grad.is_none() {
                             vref.grad = Some(gx)
                         } else {
-                            let tmp = vref.grad.clone().unwrap();
+                            let tmp = vref.grad.clone().unwrap().clone();
+                            let tmp = if ptr::eq(self_ptr, tmp.content.as_ptr()) {
+                                self.to_node()
+                            } else {
+                                tmp
+                            };
                             vref.grad = Some(tmp + gx);
                         }
                         if let Some(creator) = vref.creator.as_ref() {

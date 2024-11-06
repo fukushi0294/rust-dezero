@@ -9,7 +9,7 @@ pub trait Function {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
         let mut x = Vec::new();
         for v in inputs.iter() {
-            let var = v.borrow_mut().clone();
+            let var = v.borrow().clone();
             x.push(var.data.clone());
         }
         let ys = self.forward(x.as_slice());
@@ -35,7 +35,7 @@ pub trait Function {
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function>;
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode>;
     fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
     fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
 }
@@ -93,11 +93,11 @@ impl Function for Square {
         let x = inputs[0].clone();
         vec![x.pow2()]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = v.borrow_mut().data.clone();
-            return vec![2.0 * x * &gys[0]];
+            let x = VarNode { content: v.clone() };
+            return vec![2.0 * x * gys.get(0).unwrap().clone()];
         } else {
             return vec![];
         }
@@ -158,11 +158,11 @@ impl Function for Exp {
         let x = inputs[0].clone();
         vec![x.exp()]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = v.borrow_mut().data.clone();
-            return vec![x.exp() * &gys[0]];
+            let x = VarNode { content: v.clone() };
+            return vec![x.exp() * gys.get(0).unwrap().clone()];
         } else {
             return vec![];
         }
@@ -225,7 +225,7 @@ impl Function for Add {
         let x2 = inputs[1].clone();
         vec![x1 + x2]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), gys[0].clone()];
     }
@@ -284,11 +284,15 @@ impl Function for Mul {
         let x2 = inputs[1].clone();
         vec![x1 * x2]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = self.input.0.clone().unwrap().borrow_mut().data.clone();
-            let x2 = self.input.1.clone().unwrap().borrow_mut().data.clone();
+            let x1 = VarNode {
+                content: self.input.0.clone().unwrap().clone(),
+            };
+            let x2 = VarNode {
+                content: self.input.1.clone().unwrap().clone(),
+            };
             vec![gys[0].clone() * x2, gys[0].clone() * x1]
         } else {
             vec![]
@@ -349,7 +353,7 @@ impl Function for Sub {
         let x2 = inputs[1].clone();
         vec![x1 - x2]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), -gys[0].clone()];
     }
@@ -408,12 +412,19 @@ impl Function for Div {
         let x2 = inputs[1].clone();
         vec![x1 / x2]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = self.input.0.clone().unwrap().borrow_mut().data.clone();
-            let x2 = self.input.1.clone().unwrap().borrow_mut().data.clone();
-            vec![gys[0].clone() / &x1, -gys[0].clone() * &x1 / x2.pow2()];
+            let x1 = VarNode {
+                content: self.input.0.clone().unwrap().clone(),
+            };
+            let x2 = VarNode {
+                content: self.input.1.clone().unwrap().clone(),
+            };
+            vec![
+                gys[0].clone() / x1.clone(),
+                -gys[0].clone() * x1 / x2.powi(2),
+            ];
         }
         vec![]
     }
@@ -470,9 +481,9 @@ impl Function for Neg {
         let x = inputs[0].clone();
         vec![-x]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        if let Some(v) = &self.input {
+        if let Some(_v) = &self.input {
             return vec![-gys[0].clone()];
         } else {
             return vec![];
@@ -532,10 +543,10 @@ impl Function for Pow {
         let x = inputs[0].clone();
         vec![x.powi(self.factor)]
     }
-    fn backward(&self, gys: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = v.borrow_mut().data.clone();
+            let x = VarNode { content: v.clone() };
             return vec![self.factor as f64 * x.powi(self.factor - 1) * gys[0].clone()];
         } else {
             return vec![];
