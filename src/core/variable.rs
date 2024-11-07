@@ -1,6 +1,6 @@
 use crate::core::function::{self, BiFunction, Function, UniFunction};
 use crate::enable_backprop;
-use ndarray::{Array, Array1, ArrayBase, Data, IxDyn};
+use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
@@ -256,6 +256,24 @@ impl Add for VarNode {
     }
 }
 
+impl Add<f64> for VarNode {
+    type Output = VarNode;
+    fn add(self, rhs: f64) -> Self::Output {
+        let dim = self.content.borrow().data.raw_dim();
+        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        self + rhs
+    }
+}
+
+impl Add<VarNode> for f64 {
+    type Output = VarNode;
+    fn add(self, rhs: VarNode) -> Self::Output {
+        let dim = rhs.content.borrow().data.raw_dim();
+        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        rhs + lhs
+    }
+}
+
 impl Mul for VarNode {
     type Output = VarNode;
     fn mul(self, rhs: Self) -> Self::Output {
@@ -287,6 +305,24 @@ impl Sub for VarNode {
     fn sub(self, rhs: Self) -> Self::Output {
         let mut operator = function::Sub::new();
         operator.apply(self, rhs)
+    }
+}
+
+impl Sub<f64> for VarNode {
+    type Output = VarNode;
+    fn sub(self, rhs: f64) -> Self::Output {
+        let dim = self.content.borrow().data.raw_dim();
+        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        self - rhs
+    }
+}
+
+impl Sub<VarNode> for f64 {
+    type Output = VarNode;
+    fn sub(self, rhs: VarNode) -> Self::Output {
+        let dim = rhs.content.borrow().data.raw_dim();
+        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        rhs - lhs
     }
 }
 

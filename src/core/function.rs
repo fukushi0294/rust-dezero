@@ -568,6 +568,187 @@ impl Function for Pow {
     }
 }
 
+pub struct Sin {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Sin {
+    pub fn new() -> Self {
+        Sin {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Sin {}
+
+impl Function for Sin {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Sin {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.sin()]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.input {
+            let x = VarNode { content: v.clone() };
+            return vec![gys[0].clone() * Cos::new().apply(x)];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
+pub struct Cos {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Cos {
+    pub fn new() -> Self {
+        Cos {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Cos {}
+
+impl Function for Cos {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Cos {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.cos()]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.input {
+            let x = VarNode { content: v.clone() };
+            return vec![-Sin::new().apply(x) * gys[0].clone()];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
+pub struct Tanh {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Tanh {
+    pub fn new() -> Self {
+        Tanh {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Tanh {}
+
+impl Function for Tanh {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Tanh {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![(x.exp() - x.exp().powi(-1)) / (x.exp() + x.exp().powi(-1))]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(v) = &self.output {
+            let y = VarNode { content: v.clone() };
+            let gy = gys.get(0).unwrap().clone();
+            return vec![gy * (1.0 - y.powi(2))];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
