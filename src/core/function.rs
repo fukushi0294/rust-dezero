@@ -1,7 +1,7 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
-use ndarray::{Array, IxDyn};
-use std::cell::RefCell;
+use ndarray::{Array, IxDyn, ShapeArg};
+use std::cell::{Ref, RefCell};
 use std::i32;
 use std::rc::Rc;
 
@@ -749,6 +749,150 @@ impl Function for Tanh {
     }
 }
 
+pub struct Reshape {
+    shape: Vec<usize>,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Reshape {
+    pub fn new(shape: Vec<usize>) -> Self {
+        Reshape {
+            shape: shape,
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Reshape {}
+
+impl Function for Reshape {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Reshape {
+            shape: self.shape.clone(),
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        let reshaped = x.to_shape(self.shape.clone());
+        vec![reshaped.unwrap().to_owned()]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(_v) = &self.output {
+            let gy = gys.get(0).unwrap();
+            let shape = self
+                .get_inputs()
+                .get(0)
+                .unwrap()
+                .borrow()
+                .data
+                .shape()
+                .to_vec();
+            return vec![reshape(gy.clone(), shape)];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
+fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
+    if x.data().shape() == shape {
+        x
+    } else {
+        Reshape::new(shape).apply(x)
+    }
+}
+
+pub struct Transpose {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Transpose {
+    pub fn new() -> Self {
+        Transpose {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Transpose {}
+
+impl Function for Transpose {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Transpose {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        vec![x.t().to_owned()]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        if let Some(_v) = &self.output {
+            let gy = gys.get(0).unwrap().clone();
+            return vec![transpose(gy)];
+        } else {
+            return vec![];
+        }
+    }
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.input {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        if let Some(v) = &self.output {
+            vec![Rc::clone(v)]
+        } else {
+            vec![]
+        }
+    }
+}
+
+fn transpose(x: VarNode) -> VarNode {
+    Transpose::new().apply(x)
+}
+
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
@@ -824,6 +968,7 @@ mod tests {
     #[test]
     fn forward_only_test() {
         no_grad! {
+
             let x1 = vec![5.0, 10.0];
             let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
             let x2 = Variable::new(Array1::from_vec(x1).into_dyn());

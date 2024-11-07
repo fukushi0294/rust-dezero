@@ -94,4 +94,18 @@ mod tests {
         y.backward();
         assert_eq!(vec![-1.0], x.get_grad_vec())
     }
+
+    #[test]
+    fn tensor_test() {
+        let a = Variable::new(array![[1., 2., 3.], [4., 5., 6.]].into_dyn()).to_node();
+        let b = a.transpose();
+        let c = a.reshape(vec![3, 2]);
+        println!("{}", b);
+        println!("{}", c);
+        b.backward();
+        println!("{}", a.grad().unwrap());
+        a.cleargrad();
+        c.backward();
+        println!("{}", a.grad().unwrap());
+    }
 }

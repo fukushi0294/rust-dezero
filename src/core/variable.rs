@@ -47,6 +47,14 @@ impl Variable {
         self.data.len()
     }
 
+    pub fn reshape(&self, shape: Vec<usize>) -> VarNode {
+        self.to_node().reshape(shape)
+    }
+
+    pub fn transpose(&self) -> VarNode {
+        self.to_node().transpose()
+    }
+
     pub fn exp(&self) -> VarNode {
         let arg = self.to_node();
         arg.exp()
@@ -235,6 +243,14 @@ impl VarNode {
         } else {
             vec![]
         }
+    }
+
+    pub fn reshape(&self, shape: Vec<usize>) -> VarNode {
+        function::Reshape::new(shape).apply(self.clone())
+    }
+
+    pub fn transpose(&self) -> VarNode {
+        function::Transpose::new().apply(self.clone())
     }
 
     pub fn exp(&self) -> VarNode {
