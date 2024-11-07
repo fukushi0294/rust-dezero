@@ -1,6 +1,6 @@
 use crate::core::function::{self, BiFunction, Function, UniFunction};
 use crate::enable_backprop;
-use ndarray::{Array, Array1, IxDyn};
+use ndarray::{Array, Array1, ArrayBase, Data, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
@@ -198,6 +198,31 @@ impl VarNode {
         self.content.borrow_mut().cleargrad()
     }
 
+    pub fn enable_graph(&self) {
+        self.content.borrow_mut().create_graph = true;
+    }
+
+    pub fn disable_graph(&self) {
+        self.content.borrow_mut().create_graph = false;
+    }
+
+    pub fn grad(&self) -> Option<VarNode> {
+        let grad = &self.content.borrow().grad;
+        if grad.is_some() {
+            Some(grad.clone().unwrap().clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn data(&self) -> Array<f64, IxDyn> {
+        self.content.borrow().data.clone()
+    }
+
+    pub fn set_data(&self, data: Array<f64, IxDyn>) {
+        self.content.borrow_mut().data = data
+    }
+
     pub fn get_grad_vec(&self) -> Vec<f64> {
         let var = self.content.borrow();
         if let Some(grad) = &var.grad {
@@ -303,7 +328,14 @@ impl Clone for Variable {
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Variable({}", self.data)
+        write!(f, "Variable({})", self.data)
+    }
+}
+
+impl fmt::Display for VarNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let data = &self.content.borrow().data;
+        write!(f, "Variable({})", data)
     }
 }
 

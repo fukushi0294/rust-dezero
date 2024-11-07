@@ -17,25 +17,45 @@ mod tests {
     fn matyas_function() {
         let x = Variable::from_vec1(vec![1.0]).to_node();
         let y = Variable::from_vec1(vec![1.0]).to_node();
-        let out = 0.26 * (x.clone().powi(2) + y.clone().powi(2)) - 0.48 * x.clone() * y.clone(); 
-        let mut z = out.content.borrow_mut();
-        println!("{}", z.data);
+        let z = 0.26 * (x.clone().powi(2) + y.clone().powi(2)) - 0.48 * x.clone() * y.clone();
+        println!("{}", z);
         z.backward();
-        let x_grad = x.get_grad_vec();
-        println!("{:?}", x_grad);
+        let x_grad = x.grad().unwrap();
+        println!("{}", x_grad);
     }
 
     #[test]
     fn second_derivative() {
         let x = Variable::from_vec1(vec![2.0]).to_node();
         let y = x.clone().powi(4) - 2.0 * x.clone().powi(2);
-        let mut  y = y.content.borrow_mut();
-        y.create_graph = true;
+        y.enable_graph();
         y.backward();
         assert_eq!(vec![24.0], x.get_grad_vec());
-        let grad_node = x.content.borrow_mut().grad.clone().unwrap();
+        let grad_node = x.grad().unwrap();
         x.cleargrad();
         grad_node.backward();
         assert_eq!(vec![44.0], x.get_grad_vec())
+    }
+
+    #[test]
+    fn newton() {
+        let x = Variable::from_vec1(vec![2.0]).to_node();
+        for _ in 1..10 {
+            println!("{}", x);
+            let y = x.clone().powi(4) - 2.0 * x.clone().powi(2);
+            x.cleargrad();
+            y.enable_graph();
+            y.backward();
+            let gx = x.grad().unwrap();
+            let gx1 = x.grad().unwrap().data();
+            x.cleargrad();
+            gx.backward();
+            let gx2 = x.grad().unwrap().data();
+            let delta = gx1 / gx2;
+            let data = x.data().clone();
+            x.set_data(data - delta);
+        }
+        let x_min = x.data().into_raw_vec_and_offset().0;
+        assert_eq!(vec![1.0], x_min)
     }
 }
