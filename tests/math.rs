@@ -1,5 +1,19 @@
 mod tests {
-    use rust_dezero::core::variable::Variable;
+    use ndarray::array;
+    use rust_dezero::core::{
+        function::{Cos, Sin, UniFunction},
+        variable::Variable,
+    };
+
+    fn assert_almost_equal(a: f64, b: f64) {
+        let epsilon = 1e-8;
+        assert!(
+            (a - b).abs() < epsilon,
+            "Values are not approximately equal: {} vs {}",
+            a,
+            b
+        );
+    }
 
     #[test]
     fn sphere_function() {
@@ -57,5 +71,27 @@ mod tests {
         }
         let x_min = x.data().into_raw_vec_and_offset().0;
         assert_eq!(vec![1.0], x_min)
+    }
+
+    #[test]
+    fn sin_functions() {
+        let x = Variable::from_vec1(vec![std::f64::consts::PI]).to_node();
+        let y = Sin::new().apply(x.clone());
+        let binding = y.data().into_raw_vec_and_offset();
+        let result = binding.0.get(0).unwrap();
+        assert_almost_equal(0., *result);
+        y.backward();
+        assert_eq!(vec![-1.0], x.get_grad_vec())
+    }
+
+    #[test]
+    fn cos_functions() {
+        let x = Variable::from_vec1(vec![std::f64::consts::PI / 2.0]).to_node();
+        let y = Cos::new().apply(x.clone());
+        let binding = y.data().into_raw_vec_and_offset();
+        let result = binding.0.get(0).unwrap();
+        assert_almost_equal(0., *result);
+        y.backward();
+        assert_eq!(vec![-1.0], x.get_grad_vec())
     }
 }
