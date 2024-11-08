@@ -1,7 +1,7 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
-use ndarray::{Array, IxDyn, ShapeArg};
-use std::cell::{Ref, RefCell};
+use ndarray::{Array, IxDyn};
+use std::cell::RefCell;
 use std::i32;
 use std::rc::Rc;
 
@@ -36,8 +36,17 @@ pub trait Function {
     ) -> Rc<dyn Function>;
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode>;
+    fn supplyer(&self) -> Rc<dyn ParamSupplier>;
+}
+
+pub trait ParamSupplier {
     fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
     fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+}
+
+struct UniFunctionParamSupplier {
+    input: Rc<RefCell<Variable>>,
+    output: Rc<RefCell<Variable>>,
 }
 
 pub trait UniFunction: Function {
@@ -49,6 +58,15 @@ pub trait UniFunction: Function {
     }
 }
 
+impl ParamSupplier for UniFunctionParamSupplier {
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        vec![Rc::clone(&self.input.clone())]
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        vec![Rc::clone(&self.output.clone())]
+    }
+}
+
 pub trait BiFunction: Function {
     fn apply(&mut self, input0: VarNode, input1: VarNode) -> VarNode {
         let output = self.call(&[input0.content, input1.content]);
@@ -56,6 +74,38 @@ pub trait BiFunction: Function {
             content: output.get(0).unwrap().clone(),
         }
     }
+}
+
+struct BiFunctionParamSupplier {
+    input: (Rc<RefCell<Variable>>, Rc<RefCell<Variable>>),
+    output: Rc<RefCell<Variable>>,
+}
+
+impl ParamSupplier for BiFunctionParamSupplier {
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        let x1 = self.input.0.clone();
+        let x2 = self.input.1.clone();
+        vec![x1, x2]
+    }
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+        vec![self.output.clone()]
+    }
+}
+
+macro_rules! params {
+    (($input:expr), ($output:expr)) => {
+        std::rc::Rc::new($crate::core::function::UniFunctionParamSupplier {
+            input: $input.clone(),
+            output: $output.clone(),
+        })
+    };
+
+    (($input1:expr, $input2:expr), ($output:expr)) => {
+        std::rc::Rc::new($crate::core::function::BiFunctionParamSupplier {
+            input: ($input1.clone(), $input2.clone()),
+            output: $output.clone(),
+        })
+    };
 }
 
 pub struct Square {
@@ -102,19 +152,11 @@ impl Function for Square {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -167,19 +209,11 @@ impl Function for Exp {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -229,21 +263,11 @@ impl Function for Add {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), gys[0].clone()];
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = &self.input.0.clone().unwrap();
-            let x2 = &self.input.1.clone().unwrap();
-            vec![Rc::clone(x1), Rc::clone(x2)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -298,21 +322,11 @@ impl Function for Mul {
             vec![]
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = &self.input.0.clone().unwrap();
-            let x2 = &self.input.1.clone().unwrap();
-            vec![Rc::clone(x1), Rc::clone(x2)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -357,21 +371,11 @@ impl Function for Sub {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), -gys[0].clone()];
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = &self.input.0.clone().unwrap();
-            let x2 = &self.input.1.clone().unwrap();
-            vec![Rc::clone(x1), Rc::clone(x2)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -428,21 +432,11 @@ impl Function for Div {
         }
         vec![]
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if self.input.0.is_some() && self.input.1.is_some() {
-            let x1 = &self.input.0.clone().unwrap();
-            let x2 = &self.input.1.clone().unwrap();
-            vec![Rc::clone(x1), Rc::clone(x2)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -489,19 +483,11 @@ impl Function for Neg {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -552,19 +538,11 @@ impl Function for Pow {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -612,19 +590,11 @@ impl Function for Sin {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -672,19 +642,11 @@ impl Function for Cos {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -733,19 +695,11 @@ impl Function for Tanh {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -793,8 +747,8 @@ impl Function for Reshape {
         if let Some(_v) = &self.output {
             let gy = gys.get(0).unwrap();
             let shape = self
-                .get_inputs()
-                .get(0)
+                .input
+                .clone()
                 .unwrap()
                 .borrow()
                 .data
@@ -805,19 +759,11 @@ impl Function for Reshape {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
@@ -873,19 +819,11 @@ impl Function for Transpose {
             return vec![];
         }
     }
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.input {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        if let Some(v) = &self.output {
-            vec![Rc::clone(v)]
-        } else {
-            vec![]
-        }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }
 
