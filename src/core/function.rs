@@ -1,9 +1,10 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
-use ndarray::{Array, IxDyn};
+use crate::utils;
+use ndarray::{Array, Array0, Array1, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
-use std::i32;
 use std::rc::Rc;
+use std::{array, i32, usize};
 
 pub trait Function {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
@@ -746,14 +747,7 @@ impl Function for Reshape {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
             let gy = gys.get(0).unwrap();
-            let shape = self
-                .input
-                .clone()
-                .unwrap()
-                .borrow()
-                .data
-                .shape()
-                .to_vec();
+            let shape = self.input.clone().unwrap().borrow().data.shape().to_vec();
             return vec![reshape(gy.clone(), shape)];
         } else {
             return vec![];
@@ -831,6 +825,205 @@ fn transpose(x: VarNode) -> VarNode {
     Transpose::new().apply(x)
 }
 
+pub struct Sum {
+    axis: usize,
+    keep_dims: bool,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl Sum {
+    pub fn new() -> Self {
+        Sum {
+            axis: usize::MAX,
+            keep_dims: false,
+            input: None,
+            output: None,
+        }
+    }
+
+    pub fn new_axis_keep_dim(axis: usize, keep_dims: bool) -> Self {
+        Sum {
+            axis,
+            keep_dims,
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for Sum {}
+
+impl Function for Sum {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = Sum {
+            axis: self.axis,
+            keep_dims: self.keep_dims,
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        let x = inputs.get(0).clone().unwrap();
+        let y = if self.axis == usize::MAX {
+            ndarray::array![x.sum()].into_dyn()
+        } else {
+            x.sum_axis(ndarray::Axis(self.axis))
+        };
+        let y = if self.keep_dims {
+            y.to_shape(vec![1; x.ndim()]).unwrap().to_owned()
+        } else {
+            y
+        };
+        vec![y]
+    }
+
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        let gy = gys.get(0).unwrap().clone();
+        let x_dim = self.input.clone().unwrap().borrow().data.dim();
+        let gx = bloadcast_to(gy, x_dim);
+        vec![gx]
+    }
+
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
+    }
+}
+
+struct BloadcastTo {
+    dim: Dim<IxDynImpl>,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl BloadcastTo {
+    pub fn new(dim: Dim<IxDynImpl>) -> Self {
+        BloadcastTo {
+            dim,
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for BloadcastTo {}
+
+impl Function for BloadcastTo {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = BloadcastTo {
+            dim: self.dim.clone(),
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        let x = inputs.get(0).unwrap();
+        vec![x.broadcast(self.dim.clone()).unwrap().to_owned()]
+    }
+
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        let gy = gys.get(0).unwrap().clone();
+        let x_dim = self.input.clone().unwrap().borrow().data.dim();
+        vec![sum_to(gy, x_dim)]
+    }
+
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
+    }
+}
+
+fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
+    if x.data().dim() == dim {
+        x
+    } else {
+        BloadcastTo::new(dim).apply(x)
+    }
+}
+
+struct SumTo {
+    dim: Dim<IxDynImpl>,
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl SumTo {
+    pub fn new(dim: Dim<IxDynImpl>) -> Self {
+        SumTo {
+            dim,
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl UniFunction for SumTo {}
+
+impl Function for SumTo {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs.get(0).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = SumTo {
+            dim: self.dim.clone(),
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        let x = inputs.get(0).unwrap();
+        let shape = self.dim.slice();
+        vec![utils::sum_to(x, shape)]
+    }
+
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        let gy = gys.get(0).unwrap().clone();
+        let x_dim = self.input.clone().unwrap().borrow().data.dim();
+        vec![bloadcast_to(gy, x_dim)]
+    }
+
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
+    }
+}
+
+fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
+    if x.data().dim() == dim {
+        x
+    } else {
+        SumTo::new(dim).apply(x)
+    }
+}
+
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
@@ -906,7 +1099,6 @@ mod tests {
     #[test]
     fn forward_only_test() {
         no_grad! {
-
             let x1 = vec![5.0, 10.0];
             let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
             let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
@@ -920,5 +1112,32 @@ mod tests {
             }
             assert_eq!(expected, result);
         }
+    }
+
+    #[test]
+    fn sum_function_test() {
+        let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
+        let x = Variable::new(base.into_dyn()).to_node();
+        let y = Sum::new_axis_keep_dim(0, false).apply(x.clone());
+        y.backward();
+        println!("{}", y);
+        println!("{}", x.grad().unwrap());
+        let x =
+            Variable::new(ndarray::array![[[1., 2.], [3., 4.]], [[5., 6.], [7., 8.]]].into_dyn())
+                .to_node();
+        let y = Sum::new_axis_keep_dim(usize::MAX, true).apply(x.clone());
+        y.backward();
+        println!("{}", y);
+        println!("{}", x.grad().unwrap());
+    }
+
+    #[test]
+    fn sum_to_function_test() {
+        let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
+        let x = Variable::new(base.into_dyn()).to_node();
+        let y = sum_to(x.clone(), IxDyn(&[1,3]));
+        println!("{}", y);
+        let y = sum_to(x, IxDyn(&[2,1]));
+        println!("{}", y);
     }
 }
