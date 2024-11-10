@@ -54,7 +54,7 @@ pub trait UniFunction: Function {
     fn apply(&mut self, input: VarNode) -> VarNode {
         let output = self.call(&[input.content]);
         VarNode {
-            content: output.get(0).unwrap().clone(),
+            content: output[0].clone(),
         }
     }
 }
@@ -72,14 +72,14 @@ pub trait BiFunction: Function {
     fn apply(&mut self, input0: VarNode, input1: VarNode) -> VarNode {
         let output = self.call(&[input0.content, input1.content]);
         VarNode {
-            content: output.get(0).unwrap().clone(),
+            content: output[0].clone(),
         }
     }
 }
 
-struct BiFunctionParamSupplier {
-    input: (Rc<RefCell<Variable>>, Rc<RefCell<Variable>>),
-    output: Rc<RefCell<Variable>>,
+pub struct BiFunctionParamSupplier {
+    pub input: (Rc<RefCell<Variable>>, Rc<RefCell<Variable>>),
+    pub output: Rc<RefCell<Variable>>,
 }
 
 impl ParamSupplier for BiFunctionParamSupplier {
@@ -93,6 +93,7 @@ impl ParamSupplier for BiFunctionParamSupplier {
     }
 }
 
+#[macro_export]
 macro_rules! params {
     (($input:expr), ($output:expr)) => {
         std::rc::Rc::new($crate::core::function::UniFunctionParamSupplier {
@@ -131,8 +132,8 @@ impl Function for Square {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Square {
             input: Some(x),
             output: Some(y),
@@ -148,7 +149,7 @@ impl Function for Square {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
             let x = VarNode { content: v.clone() };
-            return vec![2.0 * x * gys.get(0).unwrap().clone()];
+            return vec![2.0 * x * gys[0].clone()];
         } else {
             return vec![];
         }
@@ -188,8 +189,8 @@ impl Function for Exp {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Exp {
             input: Some(x),
             output: Some(y),
@@ -205,7 +206,7 @@ impl Function for Exp {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
             let x = VarNode { content: v.clone() };
-            return vec![x.exp() * gys.get(0).unwrap().clone()];
+            return vec![x.exp() * gys[0].clone()];
         } else {
             return vec![];
         }
@@ -245,9 +246,9 @@ impl Function for Add {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x1 = inputs.get(0).unwrap().clone();
-        let x2 = inputs.get(1).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        let y = outputs[0].clone();
         let f = Add {
             input: (Some(x1), Some(x2)),
             output: Some(y),
@@ -305,9 +306,9 @@ impl Function for Mul {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x1 = inputs.get(0).unwrap().clone();
-        let x2 = inputs.get(1).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        let y = outputs[0].clone();
         let f = Mul {
             input: (Some(x1), Some(x2)),
             output: Some(y),
@@ -364,9 +365,9 @@ impl Function for MatMul {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x1 = inputs.get(0).unwrap().clone();
-        let x2 = inputs.get(1).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        let y = outputs[0].clone();
         let f = MatMul {
             input: (Some(x1), Some(x2)),
             output: Some(y),
@@ -426,9 +427,9 @@ impl Function for Sub {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x1 = inputs.get(0).unwrap().clone();
-        let x2 = inputs.get(1).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        let y = outputs[0].clone();
         let f = Sub {
             input: (Some(x1), Some(x2)),
             output: Some(y),
@@ -475,9 +476,9 @@ impl Function for Div {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x1 = inputs.get(0).unwrap().clone();
-        let x2 = inputs.get(1).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x1 = inputs[0].clone();
+        let x2 = inputs[1].clone();
+        let y = outputs[0].clone();
         let f = Mul {
             input: (Some(x1), Some(x2)),
             output: Some(y),
@@ -536,8 +537,8 @@ impl Function for Neg {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Neg {
             input: Some(x),
             output: Some(y),
@@ -589,8 +590,8 @@ impl Function for Pow {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Pow {
             input: Some(x),
             factor: self.factor,
@@ -642,8 +643,8 @@ impl Function for Sin {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Sin {
             input: Some(x),
             output: Some(y),
@@ -694,8 +695,8 @@ impl Function for Cos {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Cos {
             input: Some(x),
             output: Some(y),
@@ -746,8 +747,8 @@ impl Function for Tanh {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Tanh {
             input: Some(x),
             output: Some(y),
@@ -763,7 +764,7 @@ impl Function for Tanh {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.output {
             let y = VarNode { content: v.clone() };
-            let gy = gys.get(0).unwrap().clone();
+            let gy = gys[0].clone();
             return vec![gy * (1.0 - y.powi(2))];
         } else {
             return vec![];
@@ -801,8 +802,8 @@ impl Function for Reshape {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Reshape {
             shape: self.shape.clone(),
             input: Some(x),
@@ -819,9 +820,9 @@ impl Function for Reshape {
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
-            let gy = gys.get(0).unwrap();
+            let gy = gys[0].clone();
             let shape = self.input.clone().unwrap().borrow().data.shape().to_vec();
-            return vec![reshape(gy.clone(), shape)];
+            return vec![reshape(gy, shape)];
         } else {
             return vec![];
         }
@@ -864,8 +865,8 @@ impl Function for Transpose {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Transpose {
             input: Some(x),
             output: Some(y),
@@ -880,7 +881,7 @@ impl Function for Transpose {
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
-            let gy = gys.get(0).unwrap().clone();
+            let gy = gys[0].clone();
             return vec![transpose(gy)];
         } else {
             return vec![];
@@ -933,8 +934,8 @@ impl Function for Sum {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = Sum {
             axis: self.axis,
             keep_dims: self.keep_dims,
@@ -960,7 +961,7 @@ impl Function for Sum {
     }
 
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
-        let gy = gys.get(0).unwrap().clone();
+        let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         let gx = bloadcast_to(gy, x_dim);
         vec![gx]
@@ -998,8 +999,8 @@ impl Function for BloadcastTo {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = BloadcastTo {
             dim: self.dim.clone(),
             input: Some(x),
@@ -1014,7 +1015,7 @@ impl Function for BloadcastTo {
     }
 
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
-        let gy = gys.get(0).unwrap().clone();
+        let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![sum_to(gy, x_dim)]
     }
@@ -1059,8 +1060,8 @@ impl Function for SumTo {
         inputs: &[Rc<RefCell<Variable>>],
         outputs: &[Rc<RefCell<Variable>>],
     ) -> Rc<dyn Function> {
-        let x = inputs.get(0).unwrap().clone();
-        let y = outputs.get(0).unwrap().clone();
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
         let f = SumTo {
             dim: self.dim.clone(),
             input: Some(x),
@@ -1076,7 +1077,7 @@ impl Function for SumTo {
     }
 
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
-        let gy = gys.get(0).unwrap().clone();
+        let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![bloadcast_to(gy, x_dim)]
     }
@@ -1102,9 +1103,9 @@ fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let x0 = Variable::new(x.data.clone() - eps);
     let x1 = Variable::new(x.data.clone() + eps);
     let y0 = f.call(&[Rc::new(RefCell::new(x0))]);
-    let y0_data = y0.get(0).unwrap().borrow_mut().data.clone();
+    let y0_data = y0[0].borrow_mut().data.clone();
     let y1 = f.call(&[Rc::new(RefCell::new(x1))]);
-    let y1_data = y1.get(0).unwrap().borrow_mut().data.clone();
+    let y1_data = y1[0].borrow_mut().data.clone();
     return (y1_data - y0_data) / (eps * 2.0);
 }
 
@@ -1124,7 +1125,7 @@ mod tests {
         let actual = f.call(&[Rc::new(RefCell::new(x2))]);
         assert_eq!(1, actual.len());
         let mut result = Vec::new();
-        let var = actual.get(0).unwrap().borrow_mut();
+        let var = actual[0].borrow_mut();
         for data in var.data.clone() {
             result.push(data);
         }
@@ -1179,7 +1180,7 @@ mod tests {
             let actual = f.call(&[Rc::new(RefCell::new(x2))]);
             assert_eq!(1, actual.len());
             let mut result = Vec::new();
-            let var = actual.get(0).unwrap().borrow_mut();
+            let var = actual[0].borrow_mut();
             for data in var.data.clone() {
                 result.push(data);
             }
