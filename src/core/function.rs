@@ -256,13 +256,24 @@ impl Function for Add {
     }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        vec![x1 + x2]
+        let x0 = inputs[0].clone();
+        let x1 = inputs[1].clone();
+        vec![x0 + x1]
     }
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        return vec![gys[0].clone(), gys[0].clone()];
+        let (mut gx0, mut gx1) = (gys[0].clone(), gys[0].clone());
+        let x0 = self.input.0.clone().unwrap();
+        let x0 = x0.borrow();
+        let x0_shape = x0.data.shape();
+        let x1 = self.input.1.clone().unwrap();
+        let x1 = x1.borrow();
+        let x1_shape = x1.data.shape();
+        if x0_shape != x1_shape {
+            gx0 = sum_to(gx0, IxDyn(x0_shape));
+            gx1 = sum_to(gx1, IxDyn(x1_shape));
+        }
+        return vec![gx0, gx1];
     }
     fn supplyer(&self) -> Rc<dyn ParamSupplier> {
         params!(
@@ -1135,9 +1146,20 @@ mod tests {
     fn sum_to_function_test() {
         let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
         let x = Variable::new(base.into_dyn()).to_node();
-        let y = sum_to(x.clone(), IxDyn(&[1,3]));
+        let y = sum_to(x.clone(), IxDyn(&[1, 3]));
         println!("{}", y);
-        let y = sum_to(x, IxDyn(&[2,1]));
+        let y = sum_to(x, IxDyn(&[2, 1]));
         println!("{}", y);
+    }
+
+    #[test]
+    fn bloadcast_add_test() {
+        let x0 = Variable::new(ndarray::array![1., 2., 3.].into_dyn()).to_node();
+        let x1 = Variable::new(ndarray::array![10.0].into_dyn()).to_node();
+        let y = x0.clone() + x1.clone();
+        println!("{}", y);
+        y.backward();
+        println!("{}", x0.grad().unwrap());
+        println!("{}", x1.grad().unwrap());
     }
 }
