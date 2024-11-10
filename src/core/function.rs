@@ -1,7 +1,7 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
 use crate::utils;
-use ndarray::{Array, Array0, Array1, Dim, Dimension, IxDyn, IxDynImpl};
+use ndarray::{Array, Array0, Array1, ArrayD, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{array, i32, usize};
@@ -340,6 +340,68 @@ impl Function for Mul {
             (self.output.clone().unwrap())
         )
     }
+}
+
+pub struct MatMul {
+    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    output: Option<Rc<RefCell<Variable>>>,
+}
+
+impl MatMul {
+    pub fn new() -> Self {
+        MatMul {
+            input: (None, None),
+            output: None,
+        }
+    }
+}
+
+impl BiFunction for MatMul {}
+
+impl Function for MatMul {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x1 = inputs.get(0).unwrap().clone();
+        let x2 = inputs.get(1).unwrap().clone();
+        let y = outputs.get(0).unwrap().clone();
+        let f = MatMul {
+            input: (Some(x1), Some(x2)),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 2, "inputs slice size must be 2");
+        let x0 = inputs[0].clone();
+        let x1 = inputs[1].clone();
+        let y = utils::matmul(&x0, &x1).unwrap();
+        vec![y]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        let gy = gys[0].clone();
+        let x = VarNode {
+            content: self.input.0.clone().unwrap().clone(),
+        };
+        let w = VarNode {
+            content: self.input.1.clone().unwrap().clone(),
+        };
+        let gx = matmal(gy.clone(), w.transpose());
+        let gw = matmal(x.transpose(), gy);
+        vec![gx, gw]
+    }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
+    }
+}
+
+pub fn matmal(x: VarNode, w: VarNode) -> VarNode {
+    MatMul::new().apply(x, w)
 }
 
 pub struct Sub {
@@ -772,7 +834,7 @@ impl Function for Reshape {
     }
 }
 
-fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
+pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
     if x.data().shape() == shape {
         x
     } else {
@@ -832,7 +894,7 @@ impl Function for Transpose {
     }
 }
 
-fn transpose(x: VarNode) -> VarNode {
+pub fn transpose(x: VarNode) -> VarNode {
     Transpose::new().apply(x)
 }
 
@@ -1049,7 +1111,7 @@ fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
 #[cfg(test)]
 mod tests {
     use crate::no_grad;
-    use ndarray::Array1;
+    use ndarray::{Array1, ArrayBase, ArrayD, ArrayView2, OwnedRepr};
 
     use super::*;
 
@@ -1161,5 +1223,17 @@ mod tests {
         y.backward();
         println!("{}", x0.grad().unwrap());
         println!("{}", x1.grad().unwrap());
+    }
+
+    #[test]
+    fn matmul_test() {
+        let a: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
+        let x = Variable::new(a).to_node();
+        let b: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
+        let w = Variable::new(b).to_node();
+        let y = matmal(x.clone(), w.clone());
+        y.backward();
+        println!("{}", x.grad().unwrap());
+        println!("{}", w.grad().unwrap());
     }
 }

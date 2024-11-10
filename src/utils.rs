@@ -1,4 +1,4 @@
-use ndarray::{Array, Axis, IxDyn};
+use ndarray::*;
 
 /// Sum elements along axes to output an array of a given shape.
 ///
@@ -30,6 +30,59 @@ pub fn sum_to(x: &Array<f64, IxDyn>, shape: &[usize]) -> Array<f64, IxDyn> {
     y.to_shape(shape).unwrap().to_owned()
 }
 
+/// Performs matrix multiplication between two n-dimensional arrays.
+///
+/// This function supports matrix multiplication for input arrays with the following dimension combinations:
+/// - (1, 1): Scalar-scalar multiplication
+/// - (2, 2): Matrix-matrix multiplication
+/// - (2, 1): Matrix-vector multiplication (treating the second argument as a column vector)
+/// - (1, 2): Vector-matrix multiplication (treating the first argument as a row vector)
+///
+/// If the input arrays have incompatible dimensions for matrix multiplication, an error message
+/// `"Unsupported dimension combination for matmul"` will be returned.
+///
+/// # Arguments
+/// * `a` - The first input array.
+///   - Must have type `ArrayBase<OwnedRepr<f64>, Dim<IxDynImpl>>`.
+/// * `b` - The second input array.
+///   - Must have type `ArrayBase<OwnedRepr<f64>, Dim<IxDynImpl>>`.
+///
+/// # Returns
+/// * `Result<Array<f64, Dim<IxDynImpl>>, &'static str>`
+///   - On success, returns `Ok` containing the resulting n-dimensional array of type
+///     `Array<f64, Dim<IxDynImpl>>`.
+///   - On failure due to incompatible dimensions, returns `Err` with the error message
+///     `"Unsupported dimension combination for matmul"`.
+pub fn matmul(
+    a: &ArrayBase<OwnedRepr<f64>, Dim<IxDynImpl>>,
+    b: &ArrayBase<OwnedRepr<f64>, Dim<IxDynImpl>>,
+) -> Result<Array<f64, Dim<IxDynImpl>>, &'static str> {
+    match (a.ndim(), b.ndim()) {
+        (1, 1) => {
+            let a = a.clone().into_dimensionality::<ndarray::Ix1>().unwrap();
+            let b = b.clone().into_dimensionality::<ndarray::Ix1>().unwrap();
+            Ok(array![a.dot(&b)].into_dyn())
+        }
+        (2, 2) => {
+            let a = a.clone().into_dimensionality::<ndarray::Ix2>().unwrap();
+            let b = b.clone().into_dimensionality::<ndarray::Ix2>().unwrap();
+            Ok(a.dot(&b).into_dyn())
+        }
+        (2, 1) => {
+            let a = a.clone().into_dimensionality::<ndarray::Ix2>().unwrap();
+            let b = b.clone().into_dimensionality::<ndarray::Ix1>().unwrap();
+            Ok(a.dot(&b).into_dyn())
+        }
+        (1, 2) => {
+            let a = a.clone().into_dimensionality::<ndarray::Ix1>().unwrap();
+            let b = b.clone().into_dimensionality::<ndarray::Ix2>().unwrap();
+            Ok(a.dot(&b).into_dyn())
+        }
+        _ => Err("Unsupported dimension combination for matmul"),
+    }
+}
+
+
 mod tests {
     use super::*;
 
@@ -40,5 +93,16 @@ mod tests {
         let shape = [1, 4, 1];
         let result = sum_to(&x.into_dyn(), &shape);
         println!("Result:\n{:?}", result);
+    }
+
+    #[test]
+    fn cast_to_fixed_array() {
+        let a: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
+        let b: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
+
+        match matmul(&a, &b) {
+            Ok(result) => println!("Result of a.dot(b):\n{:?}", result),
+            Err(e) => println!("Error: {}", e),
+        }
     }
 }
