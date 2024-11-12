@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 ndarray = "0.16.0"
+ndarray-rand = "0.15.0"
 once_cell = "1.10"

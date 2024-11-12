@@ -975,7 +975,7 @@ impl Function for Sum {
     }
 }
 
-struct BloadcastTo {
+pub struct BloadcastTo {
     dim: Dim<IxDynImpl>,
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -1028,7 +1028,7 @@ impl Function for BloadcastTo {
     }
 }
 
-fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
+pub fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     if x.data().dim() == dim {
         x
     } else {
