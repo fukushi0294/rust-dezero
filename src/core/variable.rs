@@ -139,6 +139,22 @@ impl Variable {
     }
 }
 
+impl Eq for Variable {
+    
+}
+
+impl PartialEq for Variable {
+    fn eq(&self, other: &Self) -> bool {
+       self.data.as_ptr() == other.data.as_ptr()
+    }
+}
+
+impl Hash for Variable {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.data.as_ptr().hash(state);
+    }
+}
+
 struct FuncPtr(*const ());
 
 impl FuncPtr {
