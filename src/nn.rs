@@ -1,15 +1,14 @@
 use std::{collections::HashSet, usize};
 
-use ndarray::Array;
-
+use crate::core::function as F;
 use crate::core::variable::{VarNode, Variable};
+use ndarray::Array;
 
 pub trait Layer {
     fn forward(&self, x: VarNode) -> VarNode;
-}
-
-pub trait Learnable {
-    fn parameters(&self) -> HashSet<Variable>;
+    fn parameters(&self) -> HashSet<Variable> {
+        HashSet::new()
+    }
 }
 
 struct Linear {
@@ -40,9 +39,7 @@ impl Layer for Linear {
         let b_node = self.b.clone();
         w_node * x + b_node
     }
-}
 
-impl Learnable for Linear {
     fn parameters(&self) -> HashSet<Variable> {
         let mut set = HashSet::new();
         let w = self.w.content.borrow().clone();
@@ -50,5 +47,13 @@ impl Learnable for Linear {
         let b = self.w.content.borrow().clone();
         set.insert(b);
         set
+    }
+}
+
+struct Sigmoid {}
+
+impl Layer for Sigmoid {
+    fn forward(&self, x: VarNode) -> VarNode {
+        return 1.0 / (1.0 + F::exp(-x));
     }
 }

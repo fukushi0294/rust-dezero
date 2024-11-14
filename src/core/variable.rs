@@ -139,13 +139,11 @@ impl Variable {
     }
 }
 
-impl Eq for Variable {
-    
-}
+impl Eq for Variable {}
 
 impl PartialEq for Variable {
     fn eq(&self, other: &Self) -> bool {
-       self.data.as_ptr() == other.data.as_ptr()
+        self.data.as_ptr() == other.data.as_ptr()
     }
 }
 
@@ -363,6 +361,24 @@ impl Div for VarNode {
     fn div(self, rhs: Self) -> Self::Output {
         let mut operator = function::Div::new();
         operator.apply(self, rhs)
+    }
+}
+
+impl Div<f64> for VarNode {
+    type Output = VarNode;
+    fn div(self, rhs: f64) -> Self::Output {
+        let dim = self.content.borrow().data.raw_dim();
+        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        self / rhs
+    }
+}
+
+impl Div<VarNode> for f64 {
+    type Output = VarNode;
+    fn div(self, rhs: VarNode) -> Self::Output {
+        let dim = rhs.content.borrow().data.raw_dim();
+        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        rhs / lhs
     }
 }
 

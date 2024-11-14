@@ -219,9 +219,9 @@ impl Function for Exp {
     }
 }
 
-pub fn exp(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
+pub fn exp(x: VarNode) -> VarNode {
     let mut f = Exp::new();
-    f.call(&[x])
+    f.apply(x)
 }
 
 pub struct Add {
