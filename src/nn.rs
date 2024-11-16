@@ -1,18 +1,21 @@
-extern crate proc_macro;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
 use crate::core::function as F;
 use crate::core::variable::{VarNode, Variable};
+use derives::Learnable;
 use ndarray::Array;
 
 pub trait Layer {
     fn forward(&self, x: VarNode) -> VarNode;
+}
+
+pub trait Learnable {
     fn parameters(&self) -> HashSet<VarNode> {
         HashSet::new()
     }
 }
+
+#[derive(Learnable)]
 pub struct Linear {
     input: usize,
     output: usize,
@@ -40,12 +43,6 @@ impl Layer for Linear {
         let w_node = self.w.clone();
         let b_node = self.b.clone();
         F::matmal(x, w_node) + b_node
-    }
-    fn parameters(&self) -> HashSet<VarNode> {
-        let mut set = HashSet::new();
-        set.insert(self.w.clone());
-        set.insert(self.b.clone());
-        set
     }
 }
 

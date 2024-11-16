@@ -1,7 +1,7 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 #[proc_macro_derive(BiFunction)]
 pub fn bifunction_derive(input: TokenStream) -> TokenStream {
@@ -28,5 +28,54 @@ pub fn bifunction_derive(input: TokenStream) -> TokenStream {
             }
         }
     };
+    TokenStream::from(expanded)
+}
+
+#[proc_macro_derive(Learnable, attributes(learnable))]
+pub fn learnable_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let statesments = match input.data {
+        Data::Struct(data) => match data.fields {
+            Fields::Named(fields) => {
+                let mut statements = Vec::new();
+                for f in fields.named.into_iter() {
+                    if let syn::Type::Path(tp) = &f.ty {
+                        if tp.path.is_ident("VarNode") {
+                            let ident = &f.ident;
+                            let state = quote! {
+                                set.insert(self.#ident.clone());
+                            };
+                            statements.push(state);
+                        }
+                    }
+                    if f.attrs.iter().any(|attr| attr.path().is_ident("learnable")) {
+                        let ident = &f.ident;
+                        let state = quote! {
+                            for item in self.#ident.parameters() {
+                                set.insert(item);
+                            }
+                        };
+                        statements.push(state);
+                    }
+                }
+                statements
+            }
+            _ => panic!("no unnamed fields are allowed"),
+        },
+        _ => panic!("expects struct"),
+    };
+
+    let expanded = quote! {
+        impl Learnable for #name {
+            fn parameters(&self) -> std::collections::HashSet<VarNode> {
+                let mut set = std::collections::HashSet::new();
+                #(#statesments)*
+                set
+            }
+        }
+    };
+
     TokenStream::from(expanded)
 }

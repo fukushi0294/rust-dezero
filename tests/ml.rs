@@ -1,6 +1,7 @@
 mod ml {
-    use std::{collections::HashSet, f64::consts::PI};
+    use std::f64::consts::PI;
 
+    use derives::Learnable;
     use ndarray::Array;
     use ndarray_rand::{rand_distr::Uniform, RandomExt};
     use rust_dezero::{
@@ -9,7 +10,7 @@ mod ml {
             variable::{VarNode, Variable},
         },
         loss,
-        nn::{self, Layer},
+        nn::{self, Layer, Learnable},
         optimizer::{Optimizer, SGD},
     };
 
@@ -34,8 +35,11 @@ mod ml {
         }
     }
 
+    #[derive(Learnable)]
     struct TwoLayerNet {
+        #[learnable]
         l1: nn::Linear,
+        #[learnable]
         l2: nn::Linear,
     }
 
@@ -54,19 +58,6 @@ mod ml {
             let y = sigmoid(y);
             let y = self.l2.forward(y);
             y
-        }
-
-        fn parameters(&self) -> HashSet<VarNode> {
-            let mut set = HashSet::new();
-            for node in self
-                .l1
-                .parameters()
-                .iter()
-                .chain(self.l2.parameters().iter())
-            {
-                set.insert(node.clone());
-            }
-            set
         }
     }
 
