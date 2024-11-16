@@ -1,8 +1,12 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
-use crate::core::function as F;
+use crate::core::function::{self as F, Function, ParamSupplier, UniFunction};
 use crate::core::variable::{VarNode, Variable};
-use derives::Learnable;
+use crate::params;
+use derives::{Learnable, UniFunction};
+use ndarray::{Array, IxDyn};
 
 pub trait Layer {
     fn forward(&self, x: VarNode) -> VarNode;
@@ -43,10 +47,52 @@ impl Layer for Linear {
     }
 }
 
-pub struct Sigmoid {}
+#[derive(UniFunction)]
+pub struct Sigmoid {
+    input: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<Variable>>>,
+}
 
-impl Layer for Sigmoid {
-    fn forward(&self, x: VarNode) -> VarNode {
-        return 1.0 / (1.0 + F::exp(-x));
+impl Sigmoid {
+    pub fn new() -> Self {
+        Sigmoid {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl Function for Sigmoid {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function> {
+        let x = inputs[0].clone();
+        let y = outputs[0].clone();
+        let f = Sigmoid {
+            input: Some(x),
+            output: Some(y),
+        };
+        Rc::new(f)
+    }
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        let y = 1.0 / (1.0 + (-x).exp());
+        vec![y]
+    }
+    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        let y = VarNode {
+            content: self.output.clone().unwrap().clone(),
+        };
+        return vec![gys[0].clone() * y.clone() * (1. - y)];
+    }
+    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
+        params!(
+            (self.input.clone().unwrap()),
+            (self.output.clone().unwrap())
+        )
     }
 }

@@ -47,9 +47,9 @@ pub trait ParamSupplier {
     fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
 }
 
-struct UniFunctionParamSupplier {
-    input: Rc<RefCell<Variable>>,
-    output: Rc<RefCell<Variable>>,
+pub struct UniFunctionParamSupplier {
+    pub input: Rc<RefCell<Variable>>,
+    pub output: Rc<RefCell<Variable>>,
 }
 
 pub trait UniFunction: Function {
@@ -1084,7 +1084,7 @@ fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
 }
 
 pub fn sigmoid(x: VarNode) -> VarNode {
-    Sigmoid {}.forward(x)
+    Sigmoid::new()(x)
 }
 
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
