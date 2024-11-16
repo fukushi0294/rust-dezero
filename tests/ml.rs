@@ -13,6 +13,27 @@ mod ml {
         optimizer::{Optimizer, SGD},
     };
 
+    #[test]
+    fn linear_layer_test() {
+        let x = Array::random((100, 1), Uniform::new(0., 1.));
+        let y = 5. + 2. * &x + Array::random((100, 1), Uniform::new(0., 1.));
+        let (x, y) = (
+            Variable::new(x.into_dyn()).to_node(),
+            Variable::new(y.into_dyn()).to_node(),
+        );
+        let model = nn::Linear::new(1, 1);
+        let lr = 0.1;
+        let optimizer = SGD::new(lr, model.parameters());
+        for _ in 0..100 {
+            let y_pred = model.forward(x.clone());
+            let loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
+            optimizer.zero_grad();
+            loss.backward();
+            optimizer.step();
+            println!("{}", loss)
+        }
+    }
+
     struct TwoLayerNet {
         l1: nn::Linear,
         l2: nn::Linear,
@@ -57,24 +78,24 @@ mod ml {
         let x = Variable::new(x.into_dyn()).to_node();
         let y = Variable::new(y.into_dyn()).to_node();
 
-        let input_size = 100;
+        let input_size = 1;
         let hidden_size = 10;
         let output_size = 1;
 
         let model = TwoLayerNet::new(input_size, hidden_size, output_size);
 
-        let max_iter = 10000;
-        let lr = 0.2;
+        let max_iter = 1000;
+        let lr = 0.01;
+        let mut criterion = loss::MeanSquaredError::new();
 
         let optimizer = SGD::new(lr, model.parameters());
         for i in 0..max_iter {
             let y_pred = model.forward(x.clone());
-            let loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
+            let loss = criterion.apply(y.clone(), y_pred);
             optimizer.zero_grad();
             loss.backward();
             optimizer.step();
-
-            if i % 1000 == 0 {
+            if i % 100 == 0 {
                 println!("{}", loss)
             }
         }
