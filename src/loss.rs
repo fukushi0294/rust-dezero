@@ -1,46 +1,33 @@
 use std::{cell::RefCell, rc::Rc};
 
-use derives::BiFunction;
+use derives::{BiFunction, FunctionNode};
 
-use crate::{
-    core::{
-        function::{self, BiFunction, Function, ParamSupplier},
+use crate::core::{
+        function::{self, BiFunction, Function, FunctionNode},
         variable::{VarNode, Variable},
-    },
-    params,
-};
+    };
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct MeanSquaredError {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl MeanSquaredError {
     pub fn new() -> Self {
         MeanSquaredError {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for MeanSquaredError {
-    fn new_instance(
-        &self,
-        inputs: &[std::rc::Rc<std::cell::RefCell<crate::core::variable::Variable>>],
-        outputs: &[std::rc::Rc<std::cell::RefCell<crate::core::variable::Variable>>],
-    ) -> std::rc::Rc<dyn Function> {
-        let x0 = inputs[0].clone();
-        let x1 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = MeanSquaredError {
-            input: (Some(x0), Some(x1)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
-
     fn forward(
         &self,
         inputs: &[ndarray::Array<f64, ndarray::IxDyn>],
@@ -58,10 +45,10 @@ impl Function for MeanSquaredError {
         gys: Vec<crate::core::variable::VarNode>,
     ) -> Vec<crate::core::variable::VarNode> {
         let x0 = VarNode {
-            content: self.input.0.clone().unwrap(),
+            content: self.input0.clone().unwrap(),
         };
         let x1 = VarNode {
-            content: self.input.1.clone().unwrap(),
+            content: self.input1.clone().unwrap(),
         };
         let diff = x0 - x1;
         let diff_data = diff.data().clone();
@@ -70,12 +57,6 @@ impl Function for MeanSquaredError {
         let gx0 = gy * diff * (2.0 / diff_data.len() as f64);
         let gx1 = -gx0.clone();
         vec![gx0, gx1]
-    }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
     }
 }
 

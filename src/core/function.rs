@@ -2,13 +2,23 @@ use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
 use crate::nn::{Layer, Sigmoid};
 use crate::utils;
-use derives::{BiFunction, UniFunction};
+use derives::{BiFunction, FunctionNode, UniFunction};
 use ndarray::{Array, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{i32, usize};
 
-pub trait Function {
+pub trait FunctionNode {
+    fn new_instance(
+        &self,
+        inputs: &[Rc<RefCell<Variable>>],
+        outputs: &[Rc<RefCell<Variable>>],
+    ) -> Rc<dyn Function>;
+    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+}
+
+pub trait Function: FunctionNode {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
         let mut x = Vec::new();
         for v in inputs.iter() {
@@ -32,24 +42,8 @@ pub trait Function {
         }
         outputs
     }
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function>;
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode>;
-    fn supplyer(&self) -> Rc<dyn ParamSupplier>;
-}
-
-pub trait ParamSupplier {
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
-}
-
-pub struct UniFunctionParamSupplier {
-    pub input: Rc<RefCell<Variable>>,
-    pub output: Rc<RefCell<Variable>>,
 }
 
 pub trait UniFunction: Function {
@@ -58,15 +52,6 @@ pub trait UniFunction: Function {
         VarNode {
             content: output[0].clone(),
         }
-    }
-}
-
-impl ParamSupplier for UniFunctionParamSupplier {
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        vec![Rc::clone(&self.input.clone())]
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        vec![Rc::clone(&self.output.clone())]
     }
 }
 
@@ -79,42 +64,11 @@ pub trait BiFunction: Function {
     }
 }
 
-pub struct BiFunctionParamSupplier {
-    pub input: (Rc<RefCell<Variable>>, Rc<RefCell<Variable>>),
-    pub output: Rc<RefCell<Variable>>,
-}
-
-impl ParamSupplier for BiFunctionParamSupplier {
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        let x1 = self.input.0.clone();
-        let x2 = self.input.1.clone();
-        vec![x1, x2]
-    }
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
-        vec![self.output.clone()]
-    }
-}
-
-#[macro_export]
-macro_rules! params {
-    (($input:expr), ($output:expr)) => {
-        std::rc::Rc::new($crate::core::function::UniFunctionParamSupplier {
-            input: $input.clone(),
-            output: $output.clone(),
-        })
-    };
-
-    (($input1:expr, $input2:expr), ($output:expr)) => {
-        std::rc::Rc::new($crate::core::function::BiFunctionParamSupplier {
-            input: ($input1.clone(), $input2.clone()),
-            output: $output.clone(),
-        })
-    };
-}
-
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Square {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -128,19 +82,6 @@ impl Square {
 }
 
 impl Function for Square {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Square {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -155,12 +96,6 @@ impl Function for Square {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
 pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
@@ -168,9 +103,11 @@ pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
     f.call(&[x])
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Exp {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -184,19 +121,6 @@ impl Exp {
 }
 
 impl Function for Exp {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Exp {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -211,12 +135,6 @@ impl Function for Exp {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
 pub fn exp(x: VarNode) -> VarNode {
@@ -224,36 +142,27 @@ pub fn exp(x: VarNode) -> VarNode {
     f(x)
 }
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct Add {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl Add {
     pub fn new() -> Self {
         Add {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for Add {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = Add {
-            input: (Some(x1), Some(x2)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x0 = inputs[0].clone();
@@ -263,10 +172,10 @@ impl Function for Add {
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         let (mut gx0, mut gx1) = (gys[0].clone(), gys[0].clone());
-        let x0 = self.input.0.clone().unwrap();
+        let x0 = self.input0.clone().unwrap();
         let x0 = x0.borrow();
         let x0_shape = x0.data.shape();
-        let x1 = self.input.1.clone().unwrap();
+        let x1 = self.input1.clone().unwrap();
         let x1 = x1.borrow();
         let x1_shape = x1.data.shape();
         if x0_shape != x1_shape {
@@ -275,44 +184,29 @@ impl Function for Add {
         }
         return vec![gx0, gx1];
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct Mul {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl Mul {
     pub fn new() -> Self {
         Mul {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for Mul {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = Mul {
-            input: (Some(x1), Some(x2)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x1 = inputs[0].clone();
@@ -321,56 +215,41 @@ impl Function for Mul {
     }
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        if self.input.0.is_some() && self.input.1.is_some() {
+        if self.input0.is_some() && self.input1.is_some() {
             let x1 = VarNode {
-                content: self.input.0.clone().unwrap().clone(),
+                content: self.input0.clone().unwrap().clone(),
             };
             let x2 = VarNode {
-                content: self.input.1.clone().unwrap().clone(),
+                content: self.input1.clone().unwrap().clone(),
             };
             vec![gys[0].clone() * x2, gys[0].clone() * x1]
         } else {
             vec![]
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct MatMul {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl MatMul {
     pub fn new() -> Self {
         MatMul {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for MatMul {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = MatMul {
-            input: (Some(x1), Some(x2)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x0 = inputs[0].clone();
@@ -381,20 +260,14 @@ impl Function for MatMul {
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         let gy = gys[0].clone();
         let x = VarNode {
-            content: self.input.0.clone().unwrap().clone(),
+            content: self.input0.clone().unwrap().clone(),
         };
         let w = VarNode {
-            content: self.input.1.clone().unwrap().clone(),
+            content: self.input1.clone().unwrap().clone(),
         };
         let gx = matmal(gy.clone(), w.transpose());
         let gw = matmal(x.transpose(), gy);
         vec![gx, gw]
-    }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
     }
 }
 
@@ -402,36 +275,27 @@ pub fn matmal(x: VarNode, w: VarNode) -> VarNode {
     MatMul::new().apply(x, w)
 }
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct Sub {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl Sub {
     pub fn new() -> Self {
         Sub {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for Sub {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = Sub {
-            input: (Some(x1), Some(x2)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x1 = inputs[0].clone();
@@ -442,44 +306,29 @@ impl Function for Sub {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), -gys[0].clone()];
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(BiFunction)]
+#[derive(BiFunction, FunctionNode)]
 pub struct Div {
-    input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
+    #[node_I]
+    input0: Option<Rc<RefCell<Variable>>>,
+    #[node_I]
+    input1: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
 impl Div {
     pub fn new() -> Self {
         Div {
-            input: (None, None),
+            input0: None,
+            input1: None,
             output: None,
         }
     }
 }
 
 impl Function for Div {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x1 = inputs[0].clone();
-        let x2 = inputs[1].clone();
-        let y = outputs[0].clone();
-        let f = Mul {
-            input: (Some(x1), Some(x2)),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 2, "inputs slice size must be 2");
         let x1 = inputs[0].clone();
@@ -488,12 +337,12 @@ impl Function for Div {
     }
     fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        if self.input.0.is_some() && self.input.1.is_some() {
+        if self.input0.is_some() && self.input1.is_some() {
             let x1 = VarNode {
-                content: self.input.0.clone().unwrap().clone(),
+                content: self.input0.clone().unwrap().clone(),
             };
             let x2 = VarNode {
-                content: self.input.1.clone().unwrap().clone(),
+                content: self.input1.clone().unwrap().clone(),
             };
             vec![
                 gys[0].clone() / x1.clone(),
@@ -502,17 +351,13 @@ impl Function for Div {
         }
         vec![]
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.0.clone().unwrap(), self.input.1.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Neg {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -526,19 +371,6 @@ impl Neg {
 }
 
 impl Function for Neg {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Neg {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -552,46 +384,28 @@ impl Function for Neg {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Pow {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
-    factor: i32,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
+    factor: i32,
 }
 
 impl Pow {
     pub fn new(factor: i32) -> Self {
         Pow {
             input: None,
-            factor,
             output: None,
+            factor,
         }
     }
 }
 
 impl Function for Pow {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Pow {
-            input: Some(x),
-            factor: self.factor,
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -606,17 +420,13 @@ impl Function for Pow {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Sin {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -630,19 +440,6 @@ impl Sin {
 }
 
 impl Function for Sin {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Sin {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -657,17 +454,13 @@ impl Function for Sin {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Cos {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -681,19 +474,6 @@ impl Cos {
 }
 
 impl Function for Cos {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Cos {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -708,17 +488,13 @@ impl Function for Cos {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Tanh {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -732,19 +508,6 @@ impl Tanh {
 }
 
 impl Function for Tanh {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Tanh {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -760,18 +523,14 @@ impl Function for Tanh {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Reshape {
     shape: Vec<usize>,
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -786,20 +545,6 @@ impl Reshape {
 }
 
 impl Function for Reshape {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Reshape {
-            shape: self.shape.clone(),
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -816,12 +561,6 @@ impl Function for Reshape {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
 pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
@@ -832,9 +571,11 @@ pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
     }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Transpose {
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -848,19 +589,6 @@ impl Transpose {
 }
 
 impl Function for Transpose {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Transpose {
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -875,23 +603,19 @@ impl Function for Transpose {
             return vec![];
         }
     }
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
 pub fn transpose(x: VarNode) -> VarNode {
     Transpose::new()(x)
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct Sum {
     axis: usize,
     keep_dims: bool,
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -916,22 +640,6 @@ impl Sum {
 }
 
 impl Function for Sum {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = Sum {
-            axis: self.axis,
-            keep_dims: self.keep_dims,
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
-
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         let x = inputs.get(0).clone().unwrap();
         let y = if self.axis == usize::MAX {
@@ -953,19 +661,14 @@ impl Function for Sum {
         let gx = bloadcast_to(gy, x_dim);
         vec![gx]
     }
-
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
-    }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 pub struct BloadcastTo {
     dim: Dim<IxDynImpl>,
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -980,21 +683,6 @@ impl BloadcastTo {
 }
 
 impl Function for BloadcastTo {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = BloadcastTo {
-            dim: self.dim.clone(),
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
-
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         let x = inputs.get(0).unwrap();
         vec![x.broadcast(self.dim.clone()).unwrap().to_owned()]
@@ -1004,13 +692,6 @@ impl Function for BloadcastTo {
         let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![sum_to(gy, x_dim)]
-    }
-
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
     }
 }
 
@@ -1022,10 +703,12 @@ pub fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     }
 }
 
-#[derive(UniFunction)]
+#[derive(UniFunction, FunctionNode)]
 struct SumTo {
     dim: Dim<IxDynImpl>,
+    #[node_I]
     input: Option<Rc<RefCell<Variable>>>,
+    #[node_O]
     output: Option<Rc<RefCell<Variable>>>,
 }
 
@@ -1040,21 +723,6 @@ impl SumTo {
 }
 
 impl Function for SumTo {
-    fn new_instance(
-        &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
-    ) -> Rc<dyn Function> {
-        let x = inputs[0].clone();
-        let y = outputs[0].clone();
-        let f = SumTo {
-            dim: self.dim.clone(),
-            input: Some(x),
-            output: Some(y),
-        };
-        Rc::new(f)
-    }
-
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         let x = inputs.get(0).unwrap();
         let shape = self.dim.slice();
@@ -1065,13 +733,6 @@ impl Function for SumTo {
         let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![bloadcast_to(gy, x_dim)]
-    }
-
-    fn supplyer(&self) -> Rc<dyn ParamSupplier> {
-        params!(
-            (self.input.clone().unwrap()),
-            (self.output.clone().unwrap())
-        )
     }
 }
 

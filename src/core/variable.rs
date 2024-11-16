@@ -108,7 +108,7 @@ impl Variable {
         let self_ptr = self as *mut Variable;
         while let Some(f) = functions.pop_front() {
             let mut gys = Vec::new();
-            for output in f.supplyer().get_outputs().iter_mut() {
+            for output in f.get_outputs().iter_mut() {
                 let output_ptr = output.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
                     gys.push(self.grad.clone().unwrap().clone());
@@ -129,7 +129,7 @@ impl Variable {
             enable_backprop!(self.create_graph, {
                 let gxs = f.backward(gys);
                 let mut gxs = VecDeque::from(gxs);
-                let mut vars = f.supplyer().get_inputs();
+                let mut vars = f.get_inputs();
                 for var in vars.iter_mut() {
                     if let Some(gx) = gxs.pop_front() {
                         let mut vref = var.borrow_mut();
