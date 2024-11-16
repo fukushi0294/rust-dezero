@@ -31,6 +31,35 @@ pub fn bifunction_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+
+#[proc_macro_derive(UniFunction)]
+pub fn unifunction_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let target = quote! { crate::core::function::UniFunction };
+    let arg = quote! { crate::core::variable::VarNode };
+
+    let expanded = quote! {
+        impl #target for #name {}
+
+        impl FnOnce<(#arg,)> for #name {
+            type Output = #arg;
+
+            extern "rust-call" fn call_once(mut self, args: (#arg,)) -> Self::Output {
+                self.call_mut(args)
+            }
+        }
+
+        impl FnMut<(#arg,)> for #name {
+            extern "rust-call" fn call_mut(&mut self, args: (#arg,)) -> Self::Output {
+                self.apply(args.0)
+            }
+        }
+    };
+    TokenStream::from(expanded)
+}
+
+
 #[proc_macro_derive(Learnable, attributes(learnable))]
 pub fn learnable_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

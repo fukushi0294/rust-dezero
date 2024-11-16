@@ -2,7 +2,7 @@ use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
 use crate::nn::{Layer, Sigmoid};
 use crate::utils;
-use derives::BiFunction;
+use derives::{BiFunction, UniFunction};
 use ndarray::{Array, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -112,6 +112,7 @@ macro_rules! params {
     };
 }
 
+#[derive(UniFunction)]
 pub struct Square {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -125,8 +126,6 @@ impl Square {
         }
     }
 }
-
-impl UniFunction for Square {}
 
 impl Function for Square {
     fn new_instance(
@@ -169,6 +168,7 @@ pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
     f.call(&[x])
 }
 
+#[derive(UniFunction)]
 pub struct Exp {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -182,8 +182,6 @@ impl Exp {
         }
     }
 }
-
-impl UniFunction for Exp {}
 
 impl Function for Exp {
     fn new_instance(
@@ -223,7 +221,7 @@ impl Function for Exp {
 
 pub fn exp(x: VarNode) -> VarNode {
     let mut f = Exp::new();
-    f.apply(x)
+    f(x)
 }
 
 #[derive(BiFunction)]
@@ -512,6 +510,7 @@ impl Function for Div {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Neg {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -525,8 +524,6 @@ impl Neg {
         }
     }
 }
-
-impl UniFunction for Neg {}
 
 impl Function for Neg {
     fn new_instance(
@@ -563,6 +560,7 @@ impl Function for Neg {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Pow {
     input: Option<Rc<RefCell<Variable>>>,
     factor: i32,
@@ -578,8 +576,6 @@ impl Pow {
         }
     }
 }
-
-impl UniFunction for Pow {}
 
 impl Function for Pow {
     fn new_instance(
@@ -618,6 +614,7 @@ impl Function for Pow {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Sin {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -631,8 +628,6 @@ impl Sin {
         }
     }
 }
-
-impl UniFunction for Sin {}
 
 impl Function for Sin {
     fn new_instance(
@@ -670,6 +665,7 @@ impl Function for Sin {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Cos {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -683,8 +679,6 @@ impl Cos {
         }
     }
 }
-
-impl UniFunction for Cos {}
 
 impl Function for Cos {
     fn new_instance(
@@ -722,6 +716,7 @@ impl Function for Cos {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Tanh {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -735,8 +730,6 @@ impl Tanh {
         }
     }
 }
-
-impl UniFunction for Tanh {}
 
 impl Function for Tanh {
     fn new_instance(
@@ -775,6 +768,7 @@ impl Function for Tanh {
     }
 }
 
+#[derive(UniFunction)]
 pub struct Reshape {
     shape: Vec<usize>,
     input: Option<Rc<RefCell<Variable>>>,
@@ -790,8 +784,6 @@ impl Reshape {
         }
     }
 }
-
-impl UniFunction for Reshape {}
 
 impl Function for Reshape {
     fn new_instance(
@@ -836,10 +828,11 @@ pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
     if x.data().shape() == shape {
         x
     } else {
-        Reshape::new(shape).apply(x)
+        Reshape::new(shape)(x)
     }
 }
 
+#[derive(UniFunction)]
 pub struct Transpose {
     input: Option<Rc<RefCell<Variable>>>,
     output: Option<Rc<RefCell<Variable>>>,
@@ -853,8 +846,6 @@ impl Transpose {
         }
     }
 }
-
-impl UniFunction for Transpose {}
 
 impl Function for Transpose {
     fn new_instance(
@@ -893,9 +884,10 @@ impl Function for Transpose {
 }
 
 pub fn transpose(x: VarNode) -> VarNode {
-    Transpose::new().apply(x)
+    Transpose::new()(x)
 }
 
+#[derive(UniFunction)]
 pub struct Sum {
     axis: usize,
     keep_dims: bool,
@@ -922,8 +914,6 @@ impl Sum {
         }
     }
 }
-
-impl UniFunction for Sum {}
 
 impl Function for Sum {
     fn new_instance(
@@ -972,6 +962,7 @@ impl Function for Sum {
     }
 }
 
+#[derive(UniFunction)]
 pub struct BloadcastTo {
     dim: Dim<IxDynImpl>,
     input: Option<Rc<RefCell<Variable>>>,
@@ -987,8 +978,6 @@ impl BloadcastTo {
         }
     }
 }
-
-impl UniFunction for BloadcastTo {}
 
 impl Function for BloadcastTo {
     fn new_instance(
@@ -1029,10 +1018,11 @@ pub fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     if x.data().dim() == dim {
         x
     } else {
-        BloadcastTo::new(dim).apply(x)
+        BloadcastTo::new(dim)(x)
     }
 }
 
+#[derive(UniFunction)]
 struct SumTo {
     dim: Dim<IxDynImpl>,
     input: Option<Rc<RefCell<Variable>>>,
@@ -1048,8 +1038,6 @@ impl SumTo {
         }
     }
 }
-
-impl UniFunction for SumTo {}
 
 impl Function for SumTo {
     fn new_instance(
@@ -1091,7 +1079,7 @@ fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     if x.data().dim() == dim {
         x
     } else {
-        SumTo::new(dim).apply(x)
+        SumTo::new(dim)(x)
     }
 }
 
@@ -1137,7 +1125,7 @@ mod tests {
     fn same_var_test() {
         let x = Variable::from_vec1(vec![3.0]).to_node();
         let mut add = Add::new();
-        let y = add.apply(x.clone(), x.clone());
+        let y = add(x.clone(), x.clone());
         y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(vec![2.0], grad)
@@ -1149,7 +1137,7 @@ mod tests {
         let x = Variable::from_vec1(input.clone()).to_node();
         let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
-        let y = f.apply(x.clone());
+        let y = f(x.clone());
         y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(expected, grad)
@@ -1160,11 +1148,11 @@ mod tests {
         let x = Variable::from_vec1(vec![2.0]).to_node();
         let mut square = Square::new();
         let mut add = Add::new();
-        let a = square.apply(x.clone());
+        let a = square(x.clone());
         let (a1, a2) = (a.clone(), a.clone());
-        let a1 = square.apply(a1);
-        let a2 = square.apply(a2);
-        let y = add.apply(a1, a2);
+        let a1 = square(a1);
+        let a2 = square(a2);
+        let y = add(a1, a2);
         y.backward();
         println!("{}", y.content.borrow().data);
         let grad = x.get_grad_vec();
@@ -1193,7 +1181,7 @@ mod tests {
     fn sum_function_test() {
         let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
         let x = Variable::new(base.into_dyn()).to_node();
-        let y = Sum::new_axis_keep_dim(0, false).apply(x.clone());
+        let y = Sum::new_axis_keep_dim(0, false)(x.clone());
         y.backward();
         println!("{}", y);
         println!("{}", x.grad().unwrap());
