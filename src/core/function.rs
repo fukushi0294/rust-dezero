@@ -2,10 +2,11 @@ use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
 use crate::nn::{Layer, Sigmoid};
 use crate::utils;
-use ndarray::{Array, Array0, Array1, ArrayD, Dim, Dimension, IxDyn, IxDynImpl};
+use derives::BiFunction;
+use ndarray::{Array, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{array, i32, usize};
+use std::{i32, usize};
 
 pub trait Function {
     fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
@@ -225,6 +226,7 @@ pub fn exp(x: VarNode) -> VarNode {
     f.apply(x)
 }
 
+#[derive(BiFunction)]
 pub struct Add {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
@@ -238,8 +240,6 @@ impl Add {
         }
     }
 }
-
-impl BiFunction for Add {}
 
 impl Function for Add {
     fn new_instance(
@@ -285,6 +285,7 @@ impl Function for Add {
     }
 }
 
+#[derive(BiFunction)]
 pub struct Mul {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
@@ -298,8 +299,6 @@ impl Mul {
         }
     }
 }
-
-impl BiFunction for Mul {}
 
 impl Function for Mul {
     fn new_instance(
@@ -344,6 +343,7 @@ impl Function for Mul {
     }
 }
 
+#[derive(BiFunction)]
 pub struct MatMul {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
@@ -357,8 +357,6 @@ impl MatMul {
         }
     }
 }
-
-impl BiFunction for MatMul {}
 
 impl Function for MatMul {
     fn new_instance(
@@ -406,6 +404,7 @@ pub fn matmal(x: VarNode, w: VarNode) -> VarNode {
     MatMul::new().apply(x, w)
 }
 
+#[derive(BiFunction)]
 pub struct Sub {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
@@ -419,8 +418,6 @@ impl Sub {
         }
     }
 }
-
-impl BiFunction for Sub {}
 
 impl Function for Sub {
     fn new_instance(
@@ -455,6 +452,7 @@ impl Function for Sub {
     }
 }
 
+#[derive(BiFunction)]
 pub struct Div {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
@@ -468,8 +466,6 @@ impl Div {
         }
     }
 }
-
-impl BiFunction for Div {}
 
 impl Function for Div {
     fn new_instance(

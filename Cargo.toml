@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+derives = { path = "derives" }
 ndarray = "0.16.0"
 ndarray-rand = "0.15.0"
 once_cell = "1.10"

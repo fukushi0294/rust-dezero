@@ -91,7 +91,7 @@ mod ml {
         let optimizer = SGD::new(lr, model.parameters());
         for i in 0..max_iter {
             let y_pred = model.forward(x.clone());
-            let loss = criterion.apply(y.clone(), y_pred);
+            let loss = criterion(y.clone(), y_pred);
             optimizer.zero_grad();
             loss.backward();
             optimizer.step();

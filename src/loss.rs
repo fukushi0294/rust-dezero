@@ -1,5 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
+use derives::BiFunction;
+
 use crate::{
     core::{
         function::{self, BiFunction, Function, ParamSupplier},
@@ -8,12 +10,11 @@ use crate::{
     params,
 };
 
+#[derive(BiFunction)]
 pub struct MeanSquaredError {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
 }
-
-impl BiFunction for MeanSquaredError {}
 
 impl MeanSquaredError {
     pub fn new() -> Self {
