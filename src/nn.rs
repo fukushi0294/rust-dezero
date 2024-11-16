@@ -3,7 +3,6 @@ use std::{collections::HashSet, usize};
 use crate::core::function as F;
 use crate::core::variable::{VarNode, Variable};
 use derives::Learnable;
-use ndarray::Array;
 
 pub trait Layer {
     fn forward(&self, x: VarNode) -> VarNode;
@@ -25,15 +24,13 @@ pub struct Linear {
 
 impl Linear {
     pub fn new(input: usize, output: usize) -> Self {
-        let w_base = Array::zeros((input, output)).into_dyn();
-        let w = Variable::new(w_base).to_node();
-        let b_base = Array::zeros(output).into_dyn();
-        let b = Variable::new(b_base).to_node();
+        let w = Variable::zeros((input, output)).to_node();
+        let b = Variable::zero(output).to_node();
         Linear {
             input,
             output,
-            w: w,
-            b: b,
+            w,
+            b,
         }
     }
 }

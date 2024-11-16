@@ -2,6 +2,8 @@ use crate::core::function::{self, BiFunction, Function, UniFunction};
 use crate::enable_backprop;
 use ndarray::{Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
+use ndarray_rand::rand_distr::Uniform;
+use ndarray_rand::RandomExt;
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
@@ -27,6 +29,21 @@ impl Variable {
             create_graph: false,
             creator: None,
         };
+    }
+
+    pub fn zeros(shape: (usize, usize)) -> Self {
+        let base = Array::zeros(shape);
+        Self::new(base.into_dyn())
+    }
+
+    pub fn zero(shape: usize) -> Self {
+        let base = Array::zeros(shape);
+        Self::new(base.into_dyn())
+    }
+
+    pub fn randn(shape: (usize, usize), uniform: (f64, f64)) -> Self {
+        let base = Array::random(shape, Uniform::new(uniform.0, uniform.1));
+        Self::new(base.into_dyn())
     }
 
     pub fn from_vec1(v: Vec<f64>) -> Self {

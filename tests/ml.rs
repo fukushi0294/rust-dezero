@@ -8,10 +8,7 @@ mod ml {
         core::{
             function::{sigmoid, BiFunction},
             variable::{VarNode, Variable},
-        },
-        loss,
-        nn::{self, Layer, Learnable},
-        optimizer::{Optimizer, SGD},
+        }, loss, nn::{self, Layer, Learnable}, optimizer::{Optimizer, SGD}
     };
 
     #[test]
