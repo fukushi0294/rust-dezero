@@ -278,6 +278,20 @@ impl VarNode {
     }
 }
 
+impl Eq for VarNode {}
+
+impl PartialEq for VarNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.content.as_ptr() == other.content.as_ptr()
+    }
+}
+
+impl Hash for VarNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.content.as_ptr().hash(state);
+    }
+}
+
 impl Add for VarNode {
     type Output = VarNode;
     fn add(self, rhs: Self) -> Self {

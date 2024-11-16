@@ -1,5 +1,6 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarNode, Variable};
+use crate::nn::{Layer, Sigmoid};
 use crate::utils;
 use ndarray::{Array, Array0, Array1, ArrayD, Dim, Dimension, IxDyn, IxDynImpl};
 use std::cell::RefCell;
@@ -1098,6 +1099,10 @@ fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     }
 }
 
+pub fn sigmoid(x: VarNode) -> VarNode {
+    Sigmoid {}.forward(x)
+}
+
 fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
     let eps = 1e-4;
     let x0 = Variable::new(x.data.clone() - eps);
@@ -1228,9 +1233,11 @@ mod tests {
 
     #[test]
     fn matmul_test() {
-        let a: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
+        let a: ArrayBase<OwnedRepr<f64>, _> =
+            ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
         let x = Variable::new(a).to_node();
-        let b: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
+        let b: ArrayBase<OwnedRepr<f64>, _> =
+            ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
         let w = Variable::new(b).to_node();
         let y = matmal(x.clone(), w.clone());
         y.backward();

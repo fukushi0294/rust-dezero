@@ -8,7 +8,7 @@ use crate::{
     params,
 };
 
-struct MeanSquaredError {
+pub struct MeanSquaredError {
     input: (Option<Rc<RefCell<Variable>>>, Option<Rc<RefCell<Variable>>>),
     output: Option<Rc<RefCell<Variable>>>,
 }

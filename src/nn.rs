@@ -1,3 +1,6 @@
+extern crate proc_macro;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
 use crate::core::function as F;
@@ -6,12 +9,11 @@ use ndarray::Array;
 
 pub trait Layer {
     fn forward(&self, x: VarNode) -> VarNode;
-    fn parameters(&self) -> HashSet<Variable> {
+    fn parameters(&self) -> HashSet<VarNode> {
         HashSet::new()
     }
 }
-
-struct Linear {
+pub struct Linear {
     input: usize,
     output: usize,
     w: VarNode,
@@ -39,18 +41,15 @@ impl Layer for Linear {
         let b_node = self.b.clone();
         w_node * x + b_node
     }
-
-    fn parameters(&self) -> HashSet<Variable> {
+    fn parameters(&self) -> HashSet<VarNode> {
         let mut set = HashSet::new();
-        let w = self.w.content.borrow().clone();
-        set.insert(w);
-        let b = self.w.content.borrow().clone();
-        set.insert(b);
+        set.insert(self.w.clone());
+        set.insert(self.b.clone());
         set
     }
 }
 
-struct Sigmoid {}
+pub struct Sigmoid {}
 
 impl Layer for Sigmoid {
     fn forward(&self, x: VarNode) -> VarNode {
