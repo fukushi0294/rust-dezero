@@ -46,6 +46,38 @@ impl Layer for Linear {
     }
 }
 
+pub trait Module: Layer + Learnable {}
+
+pub struct Sequential {
+    layers: Vec<Box<dyn Module>>,
+}
+
+impl Sequential {
+    pub fn new(layers: Vec<Box<dyn Module>>) -> Self {
+        Sequential { layers }
+    }
+}
+
+impl Layer for Sequential {
+    fn forward(&self, x: VarNode) -> VarNode {
+        let mut x_out = x.clone();
+        for l in self.layers.iter() {
+            x_out = l.forward(x_out.clone());
+        }
+        x_out
+    }
+}
+
+impl Learnable for Sequential {
+    fn parameters(&self) -> HashSet<VarNode> {
+        self.layers
+            .iter()
+            .flat_map(|l| l.parameters().into_iter())
+            .map(|e| e.clone())
+            .collect()
+    }
+}
+
 #[derive(UniFunction, FunctionNode)]
 pub struct Sigmoid {
     #[node_I]
