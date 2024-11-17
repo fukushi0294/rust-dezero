@@ -1,4 +1,9 @@
 use ndarray::*;
+use std::hash::{Hash, Hasher};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 /// Sum elements along axes to output an array of a given shape.
 ///
@@ -82,6 +87,39 @@ pub fn matmul(
     }
 }
 
+pub struct WeakKey<T> {
+    weak_ref: Weak<RefCell<T>>,
+}
+
+impl<T> WeakKey<T> {
+    pub fn from(key: &Rc<RefCell<T>>) -> Self {
+        WeakKey {
+            weak_ref: Rc::downgrade(key),
+        }
+    }
+}
+
+impl<T> PartialEq for WeakKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        if let Some(lhs) = &self.weak_ref.upgrade() {
+            if let Some(rhs) = &other.weak_ref.upgrade() {
+                return Rc::ptr_eq(lhs, rhs);
+            }
+        }
+        false
+    }
+}
+
+impl<T> Eq for WeakKey<T> {}
+
+impl<T> Hash for WeakKey<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self.weak_ref.upgrade() {
+            Some(rc) => Rc::as_ptr(&rc).hash(state),
+            None => 0.hash(state),
+        }
+    }
+}
 
 mod tests {
     use super::*;
@@ -97,8 +135,10 @@ mod tests {
 
     #[test]
     fn cast_to_fixed_array() {
-        let a: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
-        let b: ArrayBase<OwnedRepr<f64>, _> = ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
+        let a: ArrayBase<OwnedRepr<f64>, _> =
+            ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
+        let b: ArrayBase<OwnedRepr<f64>, _> =
+            ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
 
         match matmul(&a, &b) {
             Ok(result) => println!("Result of a.dot(b):\n{:?}", result),

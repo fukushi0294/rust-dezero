@@ -8,7 +8,10 @@ mod ml {
         core::{
             function::{sigmoid, BiFunction},
             variable::{VarNode, Variable},
-        }, loss, nn::{self, Layer, Learnable}, optimizer::{Optimizer, SGD}
+        },
+        loss,
+        nn::{self, Layer, Learnable},
+        optimizer::{MomentumSGD, Optimizer, SGD},
     };
 
     #[test]
@@ -21,7 +24,7 @@ mod ml {
         );
         let model = nn::Linear::new(1, 1);
         let lr = 0.1;
-        let optimizer = SGD::new(lr, model.parameters());
+        let mut optimizer = SGD::new(lr, model.parameters());
         for _ in 0..100 {
             let y_pred = model.forward(x.clone());
             let loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
@@ -76,7 +79,7 @@ mod ml {
         let lr = 0.01;
         let mut criterion = loss::MeanSquaredError::new();
 
-        let optimizer = SGD::new(lr, model.parameters());
+        let mut optimizer = MomentumSGD::new(lr, 0.9, model.parameters());
         for i in 0..max_iter {
             let y_pred = model.forward(x.clone());
             let loss = criterion(y.clone(), y_pred);

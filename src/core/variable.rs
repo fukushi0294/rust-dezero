@@ -10,7 +10,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::ptr;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 pub struct Variable {
     pub data: Array<f64, IxDyn>,
