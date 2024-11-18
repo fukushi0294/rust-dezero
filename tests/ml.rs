@@ -7,7 +7,7 @@ mod ml {
     use rust_dezero::{
         core::{
             function::{sigmoid, BiFunction},
-            variable::{Variable, VarData},
+            variable::{Variable},
         },
         loss,
         nn::{self, Layer, Learnable},
@@ -27,7 +27,7 @@ mod ml {
         let mut optimizer = SGD::new(lr, model.parameters());
         for _ in 0..100 {
             let y_pred = model.forward(x.clone());
-            let loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
+            let mut loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
             optimizer.zero_grad();
             loss.backward();
             optimizer.step();
@@ -82,7 +82,7 @@ mod ml {
         let mut optimizer = MomentumSGD::new(lr, 0.9, model.parameters());
         for i in 0..max_iter {
             let y_pred = model.forward(x.clone());
-            let loss = criterion(y.clone(), y_pred);
+            let mut loss = criterion(y.clone(), y_pred);
             optimizer.zero_grad();
             loss.backward();
             optimizer.step();

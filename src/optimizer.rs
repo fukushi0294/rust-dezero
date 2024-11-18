@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+};
 
 use crate::{
     core::variable::{VarData, Variable},
@@ -7,7 +9,7 @@ use crate::{
 };
 
 pub trait Optimizer {
-    fn zero_grad(&self);
+    fn zero_grad(&mut self);
     fn step(&mut self);
 }
 
@@ -23,10 +25,15 @@ impl SGD {
 }
 
 impl Optimizer for SGD {
-    fn zero_grad(&self) {
-        for var in self.params.iter() {
-            var.cleargrad();
-        }
+    fn zero_grad(&mut self) {
+        self.params = self
+            .params
+            .drain()
+            .map(|mut v| {
+                v.cleargrad();
+                v
+            })
+            .collect();
     }
 
     fn step(&mut self) {
@@ -57,11 +64,15 @@ impl MomentumSGD {
 }
 
 impl Optimizer for MomentumSGD {
-    fn zero_grad(&self) {
-        for var in self.params.iter() {
-            var.enable_graph();
-            var.cleargrad();
-        }
+    fn zero_grad(&mut self) {
+        self.params = self
+            .params
+            .drain()
+            .map(|mut v| {
+                v.cleargrad();
+                v
+            })
+            .collect();
     }
 
     fn step(&mut self) {

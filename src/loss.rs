@@ -79,8 +79,8 @@ mod test {
             VarData::new(y.into_dyn()).to_node(),
         );
 
-        let w = VarData::new(Array2::zeros((1, 1)).into_dyn()).to_node();
-        let b = VarData::new(Array1::zeros(1).into_dyn()).to_node();
+        let mut w = VarData::new(Array2::zeros((1, 1)).into_dyn()).to_node();
+        let mut b = VarData::new(Array1::zeros(1).into_dyn()).to_node();
 
         fn predict(x: Variable, w: Variable, b: Variable) -> Variable {
             function::matmal(x, w) + b
@@ -90,7 +90,7 @@ mod test {
 
         for _ in 0..100 {
             let y_pred = predict(x.clone(), w.clone(), b.clone());
-            let loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
+            let mut loss = loss::MeanSquaredError::new().apply(y.clone(), y_pred);
             w.cleargrad();
             b.cleargrad();
             loss.backward();

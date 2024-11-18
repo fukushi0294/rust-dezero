@@ -10,35 +10,25 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::ptr;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 
 pub struct VarData {
     pub data: Array<f64, IxDyn>,
-    pub grad: Option<Variable>,
-    pub retain_grad: bool,
-    pub create_graph: bool,
-    pub creator: Option<Rc<dyn Function>>,
 }
 
 impl VarData {
     pub fn new(data: Array<f64, IxDyn>) -> Self {
-        return VarData {
-            data: data,
-            grad: None,
-            retain_grad: false,
-            create_graph: false,
-            creator: None,
-        };
+        return VarData { data: data };
     }
 
     pub fn from_vec1(v: Vec<f64>) -> Self {
         VarData {
             data: Array1::from_vec(v).into_dyn(),
-            grad: None,
-            retain_grad: false,
-            create_graph: false,
-            creator: None,
         }
+    }
+
+    pub fn shape(&self) -> &[usize] {
+        self.data.shape()
     }
 
     pub fn ndim(&self) -> Dim<IxDynImpl> {
@@ -67,77 +57,8 @@ impl VarData {
         arg.powi(factor)
     }
 
-    pub fn set_creator(&mut self, creator: Rc<dyn Function>) {
-        self.creator = Some(creator);
-    }
-
-    pub fn cleargrad(&mut self) {
-        self.grad = None
-    }
-
     pub fn to_node(&self) -> Variable {
-        Variable {
-            content: Rc::new(RefCell::new(self.clone())),
-        }
-    }
-
-    pub fn backward(&mut self) {
-        if self.grad.is_none() {
-            let var = VarData::new(Array::ones(self.data.shape()));
-            self.grad = Some(var.to_node());
-        }
-        let mut functions = FunctionQueue::new();
-        if let Some(creator) = self.creator.as_mut() {
-            functions.push_back(creator.clone());
-        }
-        let self_ptr = self as *mut VarData;
-        while let Some(f) = functions.pop_front() {
-            let mut gys = Vec::new();
-            for output in f.get_outputs().iter_mut() {
-                let output_ptr = output.content.as_ptr();
-                if ptr::eq(self_ptr, output_ptr) {
-                    gys.push(self.grad.clone().unwrap().clone());
-                } else {
-                    let mut v_ref = output.content.borrow_mut();
-                    let grad = v_ref.grad.clone();
-                    if self.retain_grad {
-                        v_ref.grad = None
-                    }
-                    if grad.is_none() {
-                        let var = VarData::new(Array::ones(v_ref.data.shape()));
-                        gys.push(var.to_node());
-                    } else {
-                        gys.push(grad.unwrap());
-                    };
-                }
-            }
-            enable_backprop!(self.create_graph, {
-                let gxs = f.backward(gys);
-                let mut gxs = VecDeque::from(gxs);
-                let mut vars = f.get_inputs();
-                for var in vars.iter_mut() {
-                    if let Some(gx) = gxs.pop_front() {
-                        let mut vref = var.content.borrow_mut();
-                        if vref.grad.is_none() {
-                            vref.grad = Some(gx)
-                        } else {
-                            let tmp = vref.grad.clone().unwrap().clone();
-                            let tmp = if ptr::eq(self_ptr, tmp.content.as_ptr()) {
-                                self.to_node()
-                            } else {
-                                tmp
-                            };
-                            vref.grad = Some(tmp + gx);
-                        }
-                        if let Some(creator) = vref.creator.as_ref() {
-                            if !functions.contains(creator.clone()) {
-                                functions.push_back(creator.clone());
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        Variable::from(self.clone())
     }
 }
 
@@ -211,12 +132,20 @@ impl FunctionQueue {
 
 pub struct Variable {
     pub content: Rc<RefCell<VarData>>,
+    pub grad: Rc<RefCell<Option<Variable>>>,
+    pub retain_grad: bool,
+    pub create_graph: bool,
+    pub creator: Option<Rc<dyn Function>>,
 }
 
 impl Variable {
     pub fn from(vardata: VarData) -> Self {
         Variable {
             content: Rc::new(RefCell::new(vardata)),
+            grad: Rc::new(RefCell::new(None)),
+            retain_grad: false,
+            create_graph: false,
+            creator: None,
         }
     }
 
@@ -239,26 +168,85 @@ impl Variable {
         Self::from(VarData::new(data))
     }
 
-    pub fn backward(&self) {
-        self.content.borrow_mut().backward()
+    pub fn set_creator(&mut self, creator: Rc<dyn Function>) {
+        self.creator = Some(creator);
     }
 
-    pub fn cleargrad(&self) {
-        self.content.borrow_mut().cleargrad()
+    pub fn backward(&mut self) {
+        if self.grad.borrow().is_none() {
+            let var = Variable::from_arry(Array::ones(self.data().shape()));
+            *self.grad.borrow_mut() = Some(var);
+        }
+        let mut functions = FunctionQueue::new();
+        if let Some(creator) = self.creator.as_mut() {
+            functions.push_back(creator.clone());
+        }
+        let self_data_ptr = self.content.as_ptr();
+        while let Some(f) = functions.pop_front() {
+            let mut gys = Vec::new();
+            for output in f.get_outputs().iter_mut() {
+                let output_ptr = output.content.as_ptr();
+                if ptr::eq(self_data_ptr, output_ptr) {
+                    let gy = self.grad.borrow().clone().unwrap().clone();
+                    gys.push(gy);
+                } else {
+                    let v_ref = output.clone();
+                    let grad = v_ref.grad.clone();
+                    if self.retain_grad {
+                        *v_ref.grad.borrow_mut() = None;
+                    }
+                    if grad.borrow().is_none() {
+                        let var = Variable::from_arry(Array::ones(v_ref.data().shape()));
+                        gys.push(var);
+                    } else {
+                        let gy = grad.borrow().clone().unwrap().clone();
+                        gys.push(gy);
+                    };
+                }
+            }
+            enable_backprop!(self.create_graph, {
+                let gxs = f.backward(gys);
+                let mut gxs = VecDeque::from(gxs);
+                let mut vars = f.get_inputs();
+                for var in vars.iter_mut() {
+                    if let Some(gx) = gxs.pop_front() {
+                        if var.grad.borrow().is_none() {
+                            *var.grad.borrow_mut() = Some(gx)
+                        } else {
+                            let tmp = var.grad.borrow().clone().unwrap().clone();
+                            let tmp = if ptr::eq(self_data_ptr, tmp.content.as_ptr()) {
+                                self.clone()
+                            } else {
+                                tmp
+                            };
+                            *var.grad.borrow_mut() = Some(tmp + gx);
+                        }
+                        if let Some(creator) = var.creator.as_ref() {
+                            if !functions.contains(creator.clone()) {
+                                functions.push_back(creator.clone());
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 
-    pub fn enable_graph(&self) {
-        self.content.borrow_mut().create_graph = true;
+    pub fn cleargrad(&mut self) {
+        *self.grad.borrow_mut() = None
     }
 
-    pub fn disable_graph(&self) {
-        self.content.borrow_mut().create_graph = false;
+    pub fn enable_graph(&mut self) {
+        self.create_graph = true;
+    }
+
+    pub fn disable_graph(&mut self) {
+        self.create_graph = false;
     }
 
     pub fn grad(&self) -> Option<Variable> {
-        let grad = &self.content.borrow().grad;
-        if grad.is_some() {
-            Some(grad.clone().unwrap().clone())
+        if let Some(grad) = self.grad.borrow().clone() {
+            Some(grad.clone())
         } else {
             None
         }
@@ -273,14 +261,8 @@ impl Variable {
     }
 
     pub fn get_grad_vec(&self) -> Vec<f64> {
-        let var = self.content.borrow();
-        if let Some(grad) = &var.grad {
-            grad.content
-                .borrow()
-                .data
-                .clone()
-                .into_raw_vec_and_offset()
-                .0
+        if let Some(grad) = self.grad.borrow().clone() {
+            grad.data().into_raw_vec_and_offset().0
         } else {
             vec![]
         }
@@ -330,7 +312,7 @@ impl Add for Variable {
 impl Add<f64> for Variable {
     type Output = Variable;
     fn add(self, rhs: f64) -> Self::Output {
-        let dim = self.content.borrow().data.raw_dim();
+        let dim = self.data().raw_dim();
         let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self + rhs
     }
@@ -339,7 +321,7 @@ impl Add<f64> for Variable {
 impl Add<Variable> for f64 {
     type Output = Variable;
     fn add(self, rhs: Variable) -> Self::Output {
-        let dim = rhs.content.borrow().data.raw_dim();
+        let dim = rhs.data().raw_dim();
         let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs + lhs
     }
@@ -356,7 +338,7 @@ impl Mul for Variable {
 impl Mul<f64> for Variable {
     type Output = Variable;
     fn mul(self, rhs: f64) -> Self::Output {
-        let dim = self.content.borrow().data.raw_dim();
+        let dim = self.data().raw_dim();
         let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self * rhs
     }
@@ -365,7 +347,7 @@ impl Mul<f64> for Variable {
 impl Mul<Variable> for f64 {
     type Output = Variable;
     fn mul(self, rhs: Variable) -> Self::Output {
-        let dim = rhs.content.borrow().data.raw_dim();
+        let dim = rhs.data().raw_dim();
         let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs * lhs
     }
@@ -382,7 +364,7 @@ impl Sub for Variable {
 impl Sub<f64> for Variable {
     type Output = Variable;
     fn sub(self, rhs: f64) -> Self::Output {
-        let dim = self.content.borrow().data.raw_dim();
+        let dim = self.data().raw_dim();
         let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self - rhs
     }
@@ -391,7 +373,7 @@ impl Sub<f64> for Variable {
 impl Sub<Variable> for f64 {
     type Output = Variable;
     fn sub(self, rhs: Variable) -> Self::Output {
-        let dim = rhs.content.borrow().data.raw_dim();
+        let dim = rhs.data().raw_dim();
         let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs - lhs
     }
@@ -408,7 +390,7 @@ impl Div for Variable {
 impl Div<f64> for Variable {
     type Output = Variable;
     fn div(self, rhs: f64) -> Self::Output {
-        let dim = self.content.borrow().data.raw_dim();
+        let dim = self.data().raw_dim();
         let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self / rhs
     }
@@ -417,7 +399,7 @@ impl Div<f64> for Variable {
 impl Div<Variable> for f64 {
     type Output = Variable;
     fn div(self, rhs: Variable) -> Self::Output {
-        let dim = rhs.content.borrow().data.raw_dim();
+        let dim = rhs.data().raw_dim();
         let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs / lhs
     }
@@ -435,6 +417,10 @@ impl Clone for Variable {
     fn clone(&self) -> Self {
         Variable {
             content: self.content.clone(),
+            grad: self.grad.clone(),
+            retain_grad: self.retain_grad,
+            create_graph: self.create_graph,
+            creator: self.creator.clone(),
         }
     }
 }
@@ -443,10 +429,6 @@ impl Clone for VarData {
     fn clone(&self) -> Self {
         return VarData {
             data: self.data.clone(),
-            grad: self.grad.clone(),
-            retain_grad: self.retain_grad,
-            create_graph: self.create_graph,
-            creator: None,
         };
     }
 }
@@ -459,7 +441,7 @@ impl fmt::Display for VarData {
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data = &self.content.borrow().data;
+        let data = &self.data();
         write!(f, "Variable({})", data)
     }
 }

@@ -1,5 +1,5 @@
 use crate::core::config::CONFIG;
-use crate::core::variable::{Variable, VarData};
+use crate::core::variable::{VarData, Variable};
 use crate::nn::Sigmoid;
 use crate::utils;
 use derives::{BiFunction, FunctionNode, UniFunction};
@@ -8,11 +8,7 @@ use std::rc::Rc;
 use std::{i32, usize};
 
 pub trait FunctionNode {
-    fn new_instance(
-        &self,
-        inputs: &[Variable],
-        outputs: &[Variable],
-    ) -> Rc<dyn Function>;
+    fn new_instance(&self, inputs: &[Variable], outputs: &[Variable]) -> Rc<dyn Function>;
     fn get_inputs(&self) -> Vec<Variable>;
     fn get_outputs(&self) -> Vec<Variable>;
 }
@@ -35,7 +31,7 @@ pub trait Function: FunctionNode {
         if CONFIG.lock().unwrap().enable_backprop {
             let function_node = self.new_instance(inputs, &refs);
             for output in outputs.iter_mut() {
-                output.content.borrow_mut().creator = Some(function_node.clone());
+                output.creator = Some(function_node.clone());
             }
         }
         outputs
@@ -531,7 +527,15 @@ impl Function for Reshape {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
             let gy = gys[0].clone();
-            let shape = self.input.clone().unwrap().content.borrow().data.shape().to_vec();
+            let shape = self
+                .input
+                .clone()
+                .unwrap()
+                .content
+                .borrow()
+                .data
+                .shape()
+                .to_vec();
             return vec![reshape(gy, shape)];
         } else {
             return vec![];
@@ -751,7 +755,7 @@ mod tests {
     fn same_var_test() {
         let x = VarData::from_vec1(vec![3.0]).to_node();
         let mut add = Add::new();
-        let y = add(x.clone(), x.clone());
+        let mut y = add(x.clone(), x.clone());
         y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(vec![2.0], grad)
@@ -763,7 +767,7 @@ mod tests {
         let x = VarData::from_vec1(input.clone()).to_node();
         let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
-        let y = f(x.clone());
+        let mut y = f(x.clone());
         y.backward();
         let grad = x.get_grad_vec();
         assert_eq!(expected, grad)
@@ -778,7 +782,7 @@ mod tests {
         let (a1, a2) = (a.clone(), a.clone());
         let a1 = square(a1);
         let a2 = square(a2);
-        let y = add(a1, a2);
+        let mut y = add(a1, a2);
         y.backward();
         println!("{}", y.content.borrow().data);
         let grad = x.get_grad_vec();
@@ -807,13 +811,14 @@ mod tests {
     fn sum_function_test() {
         let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
         let x = Variable::from_arry(base.into_dyn());
-        let y = Sum::new_axis_keep_dim(0, false)(x.clone());
+        let mut y = Sum::new_axis_keep_dim(0, false)(x.clone());
         y.backward();
         println!("{}", y);
         println!("{}", x.grad().unwrap());
-        let x =
-            Variable::from_arry(ndarray::array![[[1., 2.], [3., 4.]], [[5., 6.], [7., 8.]]].into_dyn());
-        let y = Sum::new_axis_keep_dim(usize::MAX, true).apply(x.clone());
+        let x = Variable::from_arry(
+            ndarray::array![[[1., 2.], [3., 4.]], [[5., 6.], [7., 8.]]].into_dyn(),
+        );
+        let mut y = Sum::new_axis_keep_dim(usize::MAX, true).apply(x.clone());
         y.backward();
         println!("{}", y);
         println!("{}", x.grad().unwrap());
@@ -833,7 +838,7 @@ mod tests {
     fn bloadcast_add_test() {
         let x0 = Variable::from_arry(ndarray::array![1., 2., 3.].into_dyn());
         let x1 = Variable::from_arry(ndarray::array![10.0].into_dyn());
-        let y = x0.clone() + x1.clone();
+        let mut y = x0.clone() + x1.clone();
         println!("{}", y);
         y.backward();
         println!("{}", x0.grad().unwrap());
@@ -848,7 +853,7 @@ mod tests {
         let b: ArrayBase<OwnedRepr<f64>, _> =
             ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
         let w = Variable::from_arry(b);
-        let y = matmal(x.clone(), w.clone());
+        let mut y = matmal(x.clone(), w.clone());
         y.backward();
         println!("{}", x.grad().unwrap());
         println!("{}", w.grad().unwrap());
