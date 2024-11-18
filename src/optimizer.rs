@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    core::variable::{VarNode, VarData},
-    enable_backprop, utils::WeakKey,
+    core::variable::{VarData, Variable},
+    enable_backprop,
+    utils::WeakKey,
 };
 
 pub trait Optimizer {
@@ -12,11 +13,11 @@ pub trait Optimizer {
 
 pub struct SGD {
     lr: f64,
-    params: HashSet<VarNode>,
+    params: HashSet<Variable>,
 }
 
 impl SGD {
-    pub fn new(lr: f64, params: HashSet<VarNode>) -> Self {
+    pub fn new(lr: f64, params: HashSet<Variable>) -> Self {
         SGD { lr, params }
     }
 }
@@ -41,11 +42,11 @@ pub struct MomentumSGD {
     lr: f64,
     delta: f64,
     vs: HashMap<WeakKey<VarData>, VarData>,
-    params: HashSet<VarNode>,
+    params: HashSet<Variable>,
 }
 
 impl MomentumSGD {
-    pub fn new(lr: f64, delta: f64, params: HashSet<VarNode>) -> Self {
+    pub fn new(lr: f64, delta: f64, params: HashSet<Variable>) -> Self {
         MomentumSGD {
             lr,
             delta,

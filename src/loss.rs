@@ -4,17 +4,17 @@ use derives::{BiFunction, FunctionNode};
 
 use crate::core::{
         function::{self, BiFunction, Function, FunctionNode},
-        variable::{Variable, VarData},
+        variable::{Variable},
     };
 
 #[derive(BiFunction, FunctionNode)]
 pub struct MeanSquaredError {
     #[node_I]
-    input0: Option<Rc<RefCell<VarData>>>,
+    input0: Option<Variable>,
     #[node_I]
-    input1: Option<Rc<RefCell<VarData>>>,
+    input1: Option<Variable>,
     #[node_O]
-    output: Option<Rc<RefCell<VarData>>>,
+    output: Option<Variable>,
 }
 
 impl MeanSquaredError {
@@ -44,12 +44,8 @@ impl Function for MeanSquaredError {
         &self,
         gys: Vec<crate::core::variable::Variable>,
     ) -> Vec<crate::core::variable::Variable> {
-        let x0 = Variable {
-            content: self.input0.clone().unwrap(),
-        };
-        let x1 = Variable {
-            content: self.input1.clone().unwrap(),
-        };
+        let x0 = self.input0.clone().unwrap();
+        let x1 = self.input1.clone().unwrap();
         let diff = x0 - x1;
         let diff_data = diff.data().clone();
         let gy = gys[0].clone();

@@ -94,11 +94,11 @@ impl VarData {
         while let Some(f) = functions.pop_front() {
             let mut gys = Vec::new();
             for output in f.get_outputs().iter_mut() {
-                let output_ptr = output.as_ptr();
+                let output_ptr = output.content.as_ptr();
                 if ptr::eq(self_ptr, output_ptr) {
                     gys.push(self.grad.clone().unwrap().clone());
                 } else {
-                    let mut v_ref = output.borrow_mut();
+                    let mut v_ref = output.content.borrow_mut();
                     let grad = v_ref.grad.clone();
                     if self.retain_grad {
                         v_ref.grad = None
@@ -117,7 +117,7 @@ impl VarData {
                 let mut vars = f.get_inputs();
                 for var in vars.iter_mut() {
                     if let Some(gx) = gxs.pop_front() {
-                        let mut vref = var.borrow_mut();
+                        let mut vref = var.content.borrow_mut();
                         if vref.grad.is_none() {
                             vref.grad = Some(gx)
                         } else {
@@ -214,7 +214,7 @@ pub struct Variable {
 }
 
 impl Variable {
-    fn from(vardata: VarData) -> Self {
+    pub fn from(vardata: VarData) -> Self {
         Variable {
             content: Rc::new(RefCell::new(vardata)),
         }

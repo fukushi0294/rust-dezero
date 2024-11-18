@@ -74,8 +74,8 @@ pub fn function_node_derive(input: TokenStream) -> TokenStream {
         impl FunctionNode for #name {
             fn new_instance(
                 &self,
-                inputs: &[Rc<RefCell<VarData>>],
-                outputs: &[Rc<RefCell<VarData>>],
+                inputs: &[Variable],
+                outputs: &[Variable],
             ) -> Rc<dyn Function> {
                 let f = #name {
                     #(#input_quote)*
@@ -84,12 +84,12 @@ pub fn function_node_derive(input: TokenStream) -> TokenStream {
                 };
                 Rc::new(f)
             }
-            fn get_inputs(&self) -> Vec<Rc<RefCell<VarData>>> {
+            fn get_inputs(&self) -> Vec<Variable> {
                 let mut inputs = Vec::new();
                 #(#input_append)*
                 inputs
             }
-            fn get_outputs(&self) -> Vec<Rc<RefCell<VarData>>> {
+            fn get_outputs(&self) -> Vec<Variable> {
                 let mut outputs = Vec::new();
                 #(#output_append)*
                 outputs

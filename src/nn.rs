@@ -81,9 +81,9 @@ impl Learnable for Sequential {
 #[derive(UniFunction, FunctionNode)]
 pub struct Sigmoid {
     #[node_I]
-    input: Option<Rc<RefCell<VarData>>>,
+    input: Option<Variable>,
     #[node_O]
-    output: Option<Rc<RefCell<VarData>>>,
+    output: Option<Variable>,
 }
 
 impl Sigmoid {
@@ -104,9 +104,7 @@ impl Function for Sigmoid {
     }
     fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        let y = Variable {
-            content: self.output.clone().unwrap().clone(),
-        };
+        let y = self.output.clone().unwrap().clone();
         return vec![gys[0].clone() * y.clone() * (1. - y)];
     }
 }
