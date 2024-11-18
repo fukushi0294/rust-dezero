@@ -7,7 +7,7 @@ mod ml {
     use rust_dezero::{
         core::{
             function::{sigmoid, BiFunction},
-            variable::{VarNode, Variable},
+            variable::{Variable, VarData},
         },
         loss,
         nn::{self, Layer, Learnable},
@@ -19,8 +19,8 @@ mod ml {
         let x = Array::random((100, 1), Uniform::new(0., 1.));
         let y = 5. + 2. * &x + Array::random((100, 1), Uniform::new(0., 1.));
         let (x, y) = (
-            Variable::new(x.into_dyn()).to_node(),
-            Variable::new(y.into_dyn()).to_node(),
+            Variable::from_arry(x.into_dyn()),
+            Variable::from_arry(y.into_dyn()),
         );
         let model = nn::Linear::new(1, 1);
         let lr = 0.1;
@@ -53,7 +53,7 @@ mod ml {
     }
 
     impl nn::Layer for TwoLayerNet {
-        fn forward(&self, x: VarNode) -> VarNode {
+        fn forward(&self, x: Variable) -> Variable {
             let y = self.l1.forward(x);
             let y = sigmoid(y);
             let y = self.l2.forward(y);
@@ -66,8 +66,8 @@ mod ml {
         let x = Array::random((100, 1), Uniform::new(0., 1.));
         let y = (2. * PI * x.clone()).sin() + Array::random((100, 1), Uniform::new(0., 1.));
 
-        let x = Variable::new(x.into_dyn()).to_node();
-        let y = Variable::new(y.into_dyn()).to_node();
+        let x = Variable::from_arry(x.into_dyn());
+        let y = Variable::from_arry(y.into_dyn());
 
         let input_size = 1;
         let hidden_size = 10;

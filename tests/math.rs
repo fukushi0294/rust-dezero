@@ -2,7 +2,7 @@ mod tests {
     use ndarray::array;
     use rust_dezero::core::{
         function::{Cos, Sin, UniFunction},
-        variable::Variable,
+        variable::{VarData, Variable},
     };
 
     fn assert_almost_equal(a: f64, b: f64) {
@@ -17,8 +17,8 @@ mod tests {
 
     #[test]
     fn sphere_function() {
-        let x = Variable::from_vec1(vec![1.0]).to_node();
-        let y = Variable::from_vec1(vec![1.0]).to_node();
+        let x = Variable::from_arry(array![1.0].into_dyn());
+        let y = Variable::from_arry(array![1.0].into_dyn());
         let z = x.powi(2) + y.powi(2);
         z.backward();
         let x_grad = x.get_grad_vec();
@@ -29,8 +29,8 @@ mod tests {
 
     #[test]
     fn matyas_function() {
-        let x = Variable::from_vec1(vec![1.0]).to_node();
-        let y = Variable::from_vec1(vec![1.0]).to_node();
+        let x = Variable::from_arry(array![1.0].into_dyn());
+        let y = Variable::from_arry(array![1.0].into_dyn());
         let z = 0.26 * (x.clone().powi(2) + y.clone().powi(2)) - 0.48 * x.clone() * y.clone();
         println!("{}", z);
         z.backward();
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn second_derivative() {
-        let x = Variable::from_vec1(vec![2.0]).to_node();
+        let x = Variable::from_arry(array![2.0].into_dyn());
         let y = x.clone().powi(4) - 2.0 * x.clone().powi(2);
         y.enable_graph();
         y.backward();
@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn newton() {
-        let x = Variable::from_vec1(vec![2.0]).to_node();
+        let x = Variable::from_arry(array![2.0].into_dyn());
         for _ in 1..10 {
             println!("{}", x);
             let y = x.clone().powi(4) - 2.0 * x.clone().powi(2);
@@ -75,8 +75,8 @@ mod tests {
 
     #[test]
     fn sin_functions() {
-        let x = Variable::from_vec1(vec![std::f64::consts::PI]).to_node();
-        let y = Sin::new().apply(x.clone());
+        let x = Variable::from_arry(array![std::f64::consts::PI].into_dyn());
+        let y = Sin::new()(x.clone());
         let binding = y.data().into_raw_vec_and_offset();
         let result = binding.0.get(0).unwrap();
         assert_almost_equal(0., *result);
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn cos_functions() {
-        let x = Variable::from_vec1(vec![std::f64::consts::PI / 2.0]).to_node();
+        let x = Variable::from_arry(array![std::f64::consts::PI / 2.0].into_dyn());
         let y = Cos::new().apply(x.clone());
         let binding = y.data().into_raw_vec_and_offset();
         let result = binding.0.get(0).unwrap();
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn tensor_test() {
-        let a = Variable::new(array![[1., 2., 3.], [4., 5., 6.]].into_dyn()).to_node();
+        let a = Variable::from_arry(array![[1., 2., 3.], [4., 5., 6.]].into_dyn());
         let b = a.transpose();
         let c = a.reshape(vec![3, 2]);
         println!("{}", b);

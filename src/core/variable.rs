@@ -12,17 +12,17 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::ptr;
 use std::rc::{Rc, Weak};
 
-pub struct Variable {
+pub struct VarData {
     pub data: Array<f64, IxDyn>,
-    pub grad: Option<VarNode>,
+    pub grad: Option<Variable>,
     pub retain_grad: bool,
     pub create_graph: bool,
     pub creator: Option<Rc<dyn Function>>,
 }
 
-impl Variable {
+impl VarData {
     pub fn new(data: Array<f64, IxDyn>) -> Self {
-        return Variable {
+        return VarData {
             data: data,
             grad: None,
             retain_grad: false,
@@ -31,23 +31,8 @@ impl Variable {
         };
     }
 
-    pub fn zeros(shape: (usize, usize)) -> Self {
-        let base = Array::zeros(shape);
-        Self::new(base.into_dyn())
-    }
-
-    pub fn zero(shape: usize) -> Self {
-        let base = Array::zeros(shape);
-        Self::new(base.into_dyn())
-    }
-
-    pub fn randn(shape: (usize, usize), uniform: (f64, f64)) -> Self {
-        let base = Array::random(shape, Uniform::new(uniform.0, uniform.1));
-        Self::new(base.into_dyn())
-    }
-
     pub fn from_vec1(v: Vec<f64>) -> Self {
-        Variable {
+        VarData {
             data: Array1::from_vec(v).into_dyn(),
             grad: None,
             retain_grad: false,
@@ -64,20 +49,20 @@ impl Variable {
         self.data.len()
     }
 
-    pub fn reshape(&self, shape: Vec<usize>) -> VarNode {
+    pub fn reshape(&self, shape: Vec<usize>) -> Variable {
         self.to_node().reshape(shape)
     }
 
-    pub fn transpose(&self) -> VarNode {
+    pub fn transpose(&self) -> Variable {
         self.to_node().transpose()
     }
 
-    pub fn exp(&self) -> VarNode {
+    pub fn exp(&self) -> Variable {
         let arg = self.to_node();
         arg.exp()
     }
 
-    pub fn powi(&self, factor: i32) -> VarNode {
+    pub fn powi(&self, factor: i32) -> Variable {
         let arg = self.to_node();
         arg.powi(factor)
     }
@@ -90,22 +75,22 @@ impl Variable {
         self.grad = None
     }
 
-    pub fn to_node(&self) -> VarNode {
-        VarNode {
+    pub fn to_node(&self) -> Variable {
+        Variable {
             content: Rc::new(RefCell::new(self.clone())),
         }
     }
 
     pub fn backward(&mut self) {
         if self.grad.is_none() {
-            let var = Variable::new(Array::ones(self.data.shape()));
+            let var = VarData::new(Array::ones(self.data.shape()));
             self.grad = Some(var.to_node());
         }
         let mut functions = FunctionQueue::new();
         if let Some(creator) = self.creator.as_mut() {
             functions.push_back(creator.clone());
         }
-        let self_ptr = self as *mut Variable;
+        let self_ptr = self as *mut VarData;
         while let Some(f) = functions.pop_front() {
             let mut gys = Vec::new();
             for output in f.get_outputs().iter_mut() {
@@ -119,7 +104,7 @@ impl Variable {
                         v_ref.grad = None
                     }
                     if grad.is_none() {
-                        let var = Variable::new(Array::ones(v_ref.data.shape()));
+                        let var = VarData::new(Array::ones(v_ref.data.shape()));
                         gys.push(var.to_node());
                     } else {
                         gys.push(grad.unwrap());
@@ -156,15 +141,15 @@ impl Variable {
     }
 }
 
-impl Eq for Variable {}
+impl Eq for VarData {}
 
-impl PartialEq for Variable {
+impl PartialEq for VarData {
     fn eq(&self, other: &Self) -> bool {
         self.data.as_ptr() == other.data.as_ptr()
     }
 }
 
-impl Hash for Variable {
+impl Hash for VarData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.as_ptr().hash(state);
     }
@@ -224,11 +209,36 @@ impl FunctionQueue {
     }
 }
 
-pub struct VarNode {
-    pub content: Rc<RefCell<Variable>>,
+pub struct Variable {
+    pub content: Rc<RefCell<VarData>>,
 }
 
-impl VarNode {
+impl Variable {
+    fn from(vardata: VarData) -> Self {
+        Variable {
+            content: Rc::new(RefCell::new(vardata)),
+        }
+    }
+
+    pub fn zeros(shape: (usize, usize)) -> Self {
+        let base = Array::zeros(shape);
+        Self::from(VarData::new(base.into_dyn()))
+    }
+
+    pub fn zero(shape: usize) -> Self {
+        let base = Array::zeros(shape);
+        Self::from(VarData::new(base.into_dyn()))
+    }
+
+    pub fn randn(shape: (usize, usize), uniform: (f64, f64)) -> Self {
+        let base = Array::random(shape, Uniform::new(uniform.0, uniform.1));
+        Self::from(VarData::new(base.into_dyn()))
+    }
+
+    pub fn from_arry(data: Array<f64, IxDyn>) -> Self {
+        Self::from(VarData::new(data))
+    }
+
     pub fn backward(&self) {
         self.content.borrow_mut().backward()
     }
@@ -245,7 +255,7 @@ impl VarNode {
         self.content.borrow_mut().create_graph = false;
     }
 
-    pub fn grad(&self) -> Option<VarNode> {
+    pub fn grad(&self) -> Option<Variable> {
         let grad = &self.content.borrow().grad;
         if grad.is_some() {
             Some(grad.clone().unwrap().clone())
@@ -276,162 +286,162 @@ impl VarNode {
         }
     }
 
-    pub fn reshape(&self, shape: Vec<usize>) -> VarNode {
+    pub fn reshape(&self, shape: Vec<usize>) -> Variable {
         function::Reshape::new(shape).apply(self.clone())
     }
 
-    pub fn transpose(&self) -> VarNode {
+    pub fn transpose(&self) -> Variable {
         function::Transpose::new().apply(self.clone())
     }
 
-    pub fn exp(&self) -> VarNode {
+    pub fn exp(&self) -> Variable {
         let mut operator = function::Exp::new();
         operator.apply(self.clone())
     }
 
-    pub fn powi(&self, factor: i32) -> VarNode {
+    pub fn powi(&self, factor: i32) -> Variable {
         let mut operator = function::Pow::new(factor);
         operator.apply(self.clone())
     }
 }
 
-impl Eq for VarNode {}
+impl Eq for Variable {}
 
-impl PartialEq for VarNode {
+impl PartialEq for Variable {
     fn eq(&self, other: &Self) -> bool {
         self.content.as_ptr() == other.content.as_ptr()
     }
 }
 
-impl Hash for VarNode {
+impl Hash for Variable {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.content.as_ptr().hash(state);
     }
 }
 
-impl Add for VarNode {
-    type Output = VarNode;
+impl Add for Variable {
+    type Output = Variable;
     fn add(self, rhs: Self) -> Self {
         let mut operator = function::Add::new();
         operator.apply(self, rhs)
     }
 }
 
-impl Add<f64> for VarNode {
-    type Output = VarNode;
+impl Add<f64> for Variable {
+    type Output = Variable;
     fn add(self, rhs: f64) -> Self::Output {
         let dim = self.content.borrow().data.raw_dim();
-        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self + rhs
     }
 }
 
-impl Add<VarNode> for f64 {
-    type Output = VarNode;
-    fn add(self, rhs: VarNode) -> Self::Output {
+impl Add<Variable> for f64 {
+    type Output = Variable;
+    fn add(self, rhs: Variable) -> Self::Output {
         let dim = rhs.content.borrow().data.raw_dim();
-        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs + lhs
     }
 }
 
-impl Mul for VarNode {
-    type Output = VarNode;
+impl Mul for Variable {
+    type Output = Variable;
     fn mul(self, rhs: Self) -> Self::Output {
         let mut operator = function::Mul::new();
         operator.apply(self, rhs)
     }
 }
 
-impl Mul<f64> for VarNode {
-    type Output = VarNode;
+impl Mul<f64> for Variable {
+    type Output = Variable;
     fn mul(self, rhs: f64) -> Self::Output {
         let dim = self.content.borrow().data.raw_dim();
-        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self * rhs
     }
 }
 
-impl Mul<VarNode> for f64 {
-    type Output = VarNode;
-    fn mul(self, rhs: VarNode) -> Self::Output {
+impl Mul<Variable> for f64 {
+    type Output = Variable;
+    fn mul(self, rhs: Variable) -> Self::Output {
         let dim = rhs.content.borrow().data.raw_dim();
-        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs * lhs
     }
 }
 
-impl Sub for VarNode {
-    type Output = VarNode;
+impl Sub for Variable {
+    type Output = Variable;
     fn sub(self, rhs: Self) -> Self::Output {
         let mut operator = function::Sub::new();
         operator.apply(self, rhs)
     }
 }
 
-impl Sub<f64> for VarNode {
-    type Output = VarNode;
+impl Sub<f64> for Variable {
+    type Output = Variable;
     fn sub(self, rhs: f64) -> Self::Output {
         let dim = self.content.borrow().data.raw_dim();
-        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self - rhs
     }
 }
 
-impl Sub<VarNode> for f64 {
-    type Output = VarNode;
-    fn sub(self, rhs: VarNode) -> Self::Output {
+impl Sub<Variable> for f64 {
+    type Output = Variable;
+    fn sub(self, rhs: Variable) -> Self::Output {
         let dim = rhs.content.borrow().data.raw_dim();
-        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs - lhs
     }
 }
 
-impl Div for VarNode {
-    type Output = VarNode;
+impl Div for Variable {
+    type Output = Variable;
     fn div(self, rhs: Self) -> Self::Output {
         let mut operator = function::Div::new();
         operator.apply(self, rhs)
     }
 }
 
-impl Div<f64> for VarNode {
-    type Output = VarNode;
+impl Div<f64> for Variable {
+    type Output = Variable;
     fn div(self, rhs: f64) -> Self::Output {
         let dim = self.content.borrow().data.raw_dim();
-        let rhs = Variable::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
+        let rhs = VarData::new(Array::from_elem(dim, rhs).into_dyn()).to_node();
         self / rhs
     }
 }
 
-impl Div<VarNode> for f64 {
-    type Output = VarNode;
-    fn div(self, rhs: VarNode) -> Self::Output {
+impl Div<Variable> for f64 {
+    type Output = Variable;
+    fn div(self, rhs: Variable) -> Self::Output {
         let dim = rhs.content.borrow().data.raw_dim();
-        let lhs = Variable::new(Array::from_elem(dim, self).into_dyn()).to_node();
+        let lhs = VarData::new(Array::from_elem(dim, self).into_dyn()).to_node();
         rhs / lhs
     }
 }
 
-impl Neg for VarNode {
-    type Output = VarNode;
+impl Neg for Variable {
+    type Output = Variable;
     fn neg(self) -> Self::Output {
         let mut operator = function::Neg::new();
         operator.apply(self)
     }
 }
 
-impl Clone for VarNode {
+impl Clone for Variable {
     fn clone(&self) -> Self {
-        VarNode {
+        Variable {
             content: self.content.clone(),
         }
     }
 }
 
-impl Clone for Variable {
+impl Clone for VarData {
     fn clone(&self) -> Self {
-        return Variable {
+        return VarData {
             data: self.data.clone(),
             grad: self.grad.clone(),
             retain_grad: self.retain_grad,
@@ -441,21 +451,21 @@ impl Clone for Variable {
     }
 }
 
-impl fmt::Display for Variable {
+impl fmt::Display for VarData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Variable({})", self.data)
     }
 }
 
-impl fmt::Display for VarNode {
+impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let data = &self.content.borrow().data;
         write!(f, "Variable({})", data)
     }
 }
 
-impl Add for Variable {
-    type Output = VarNode;
+impl Add for VarData {
+    type Output = Variable;
     fn add(self, rhs: Self) -> Self::Output {
         let x1 = self.to_node();
         let x2 = rhs.to_node();
@@ -463,8 +473,8 @@ impl Add for Variable {
     }
 }
 
-impl Mul for Variable {
-    type Output = VarNode;
+impl Mul for VarData {
+    type Output = Variable;
     fn mul(self, rhs: Self) -> Self::Output {
         let x1 = self.to_node();
         let x2 = rhs.to_node();
@@ -472,8 +482,8 @@ impl Mul for Variable {
     }
 }
 
-impl Div for Variable {
-    type Output = VarNode;
+impl Div for VarData {
+    type Output = Variable;
     fn div(self, rhs: Self) -> Self::Output {
         let x1 = self.to_node();
         let x2 = rhs.to_node();
@@ -481,8 +491,8 @@ impl Div for Variable {
     }
 }
 
-impl Sub for Variable {
-    type Output = VarNode;
+impl Sub for VarData {
+    type Output = Variable;
     fn sub(self, rhs: Self) -> Self::Output {
         let x1 = self.to_node();
         let x2 = rhs.to_node();
@@ -490,8 +500,8 @@ impl Sub for Variable {
     }
 }
 
-impl Neg for Variable {
-    type Output = VarNode;
+impl Neg for VarData {
+    type Output = Variable;
     fn neg(self) -> Self::Output {
         self.to_node().neg()
     }

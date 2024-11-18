@@ -4,17 +4,17 @@ use derives::{BiFunction, FunctionNode};
 
 use crate::core::{
         function::{self, BiFunction, Function, FunctionNode},
-        variable::{VarNode, Variable},
+        variable::{Variable, VarData},
     };
 
 #[derive(BiFunction, FunctionNode)]
 pub struct MeanSquaredError {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl MeanSquaredError {
@@ -42,12 +42,12 @@ impl Function for MeanSquaredError {
 
     fn backward(
         &self,
-        gys: Vec<crate::core::variable::VarNode>,
-    ) -> Vec<crate::core::variable::VarNode> {
-        let x0 = VarNode {
+        gys: Vec<crate::core::variable::Variable>,
+    ) -> Vec<crate::core::variable::Variable> {
+        let x0 = Variable {
             content: self.input0.clone().unwrap(),
         };
-        let x1 = VarNode {
+        let x1 = Variable {
             content: self.input1.clone().unwrap(),
         };
         let diff = x0 - x1;
@@ -69,7 +69,7 @@ mod test {
     use crate::{
         core::{
             function::{self, BiFunction},
-            variable::{VarNode, Variable},
+            variable::{Variable, VarData},
         },
         loss,
     };
@@ -79,14 +79,14 @@ mod test {
         let x = Array::random((100, 1), Uniform::new(0., 1.));
         let y = 5. + 2. * &x + Array::random((100, 1), Uniform::new(0., 1.));
         let (x, y) = (
-            Variable::new(x.into_dyn()).to_node(),
-            Variable::new(y.into_dyn()).to_node(),
+            VarData::new(x.into_dyn()).to_node(),
+            VarData::new(y.into_dyn()).to_node(),
         );
 
-        let w = Variable::new(Array2::zeros((1, 1)).into_dyn()).to_node();
-        let b = Variable::new(Array1::zeros(1).into_dyn()).to_node();
+        let w = VarData::new(Array2::zeros((1, 1)).into_dyn()).to_node();
+        let b = VarData::new(Array1::zeros(1).into_dyn()).to_node();
 
-        fn predict(x: VarNode, w: VarNode, b: VarNode) -> VarNode {
+        fn predict(x: Variable, w: Variable, b: Variable) -> Variable {
             function::matmal(x, w) + b
         }
 

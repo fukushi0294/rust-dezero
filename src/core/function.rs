@@ -1,5 +1,5 @@
 use crate::core::config::CONFIG;
-use crate::core::variable::{VarNode, Variable};
+use crate::core::variable::{Variable, VarData};
 use crate::nn::{Layer, Sigmoid};
 use crate::utils;
 use derives::{BiFunction, FunctionNode, UniFunction};
@@ -11,15 +11,15 @@ use std::{i32, usize};
 pub trait FunctionNode {
     fn new_instance(
         &self,
-        inputs: &[Rc<RefCell<Variable>>],
-        outputs: &[Rc<RefCell<Variable>>],
+        inputs: &[Rc<RefCell<VarData>>],
+        outputs: &[Rc<RefCell<VarData>>],
     ) -> Rc<dyn Function>;
-    fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>>;
-    fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>>;
+    fn get_inputs(&self) -> Vec<Rc<RefCell<VarData>>>;
+    fn get_outputs(&self) -> Vec<Rc<RefCell<VarData>>>;
 }
 
 pub trait Function: FunctionNode {
-    fn call(&mut self, inputs: &[Rc<RefCell<Variable>>]) -> Vec<Rc<RefCell<Variable>>> {
+    fn call(&mut self, inputs: &[Rc<RefCell<VarData>>]) -> Vec<Rc<RefCell<VarData>>> {
         let mut x = Vec::new();
         for v in inputs.iter() {
             let var = v.borrow().clone();
@@ -29,7 +29,7 @@ pub trait Function: FunctionNode {
         let mut outputs = Vec::new();
         let mut refs = Vec::new();
         for y in ys {
-            let output_ref = Rc::new(RefCell::new(Variable::new(y)));
+            let output_ref = Rc::new(RefCell::new(VarData::new(y)));
             refs.push(output_ref.clone());
             outputs.push(output_ref);
         }
@@ -43,22 +43,22 @@ pub trait Function: FunctionNode {
         outputs
     }
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>>;
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode>;
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable>;
 }
 
 pub trait UniFunction: Function {
-    fn apply(&mut self, input: VarNode) -> VarNode {
+    fn apply(&mut self, input: Variable) -> Variable {
         let output = self.call(&[input.content]);
-        VarNode {
+        Variable {
             content: output[0].clone(),
         }
     }
 }
 
 pub trait BiFunction: Function {
-    fn apply(&mut self, input0: VarNode, input1: VarNode) -> VarNode {
+    fn apply(&mut self, input0: Variable, input1: Variable) -> Variable {
         let output = self.call(&[input0.content, input1.content]);
-        VarNode {
+        Variable {
             content: output[0].clone(),
         }
     }
@@ -67,9 +67,9 @@ pub trait BiFunction: Function {
 #[derive(UniFunction, FunctionNode)]
 pub struct Square {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Square {
@@ -87,10 +87,10 @@ impl Function for Square {
         let x = inputs[0].clone();
         vec![x.pow2()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = VarNode { content: v.clone() };
+            let x = Variable { content: v.clone() };
             return vec![2.0 * x * gys[0].clone()];
         } else {
             return vec![];
@@ -98,7 +98,7 @@ impl Function for Square {
     }
 }
 
-pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
+pub fn square(x: Rc<RefCell<VarData>>) -> Vec<Rc<RefCell<VarData>>> {
     let mut f = Square::new();
     f.call(&[x])
 }
@@ -106,9 +106,9 @@ pub fn square(x: Rc<RefCell<Variable>>) -> Vec<Rc<RefCell<Variable>>> {
 #[derive(UniFunction, FunctionNode)]
 pub struct Exp {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Exp {
@@ -126,10 +126,10 @@ impl Function for Exp {
         let x = inputs[0].clone();
         vec![x.exp()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = VarNode { content: v.clone() };
+            let x = Variable { content: v.clone() };
             return vec![x.exp() * gys[0].clone()];
         } else {
             return vec![];
@@ -137,7 +137,7 @@ impl Function for Exp {
     }
 }
 
-pub fn exp(x: VarNode) -> VarNode {
+pub fn exp(x: Variable) -> Variable {
     let mut f = Exp::new();
     f(x)
 }
@@ -145,11 +145,11 @@ pub fn exp(x: VarNode) -> VarNode {
 #[derive(BiFunction, FunctionNode)]
 pub struct Add {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Add {
@@ -169,7 +169,7 @@ impl Function for Add {
         let x1 = inputs[1].clone();
         vec![x0 + x1]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         let (mut gx0, mut gx1) = (gys[0].clone(), gys[0].clone());
         let x0 = self.input0.clone().unwrap();
@@ -189,11 +189,11 @@ impl Function for Add {
 #[derive(BiFunction, FunctionNode)]
 pub struct Mul {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Mul {
@@ -213,13 +213,13 @@ impl Function for Mul {
         let x2 = inputs[1].clone();
         vec![x1 * x2]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if self.input0.is_some() && self.input1.is_some() {
-            let x1 = VarNode {
+            let x1 = Variable {
                 content: self.input0.clone().unwrap().clone(),
             };
-            let x2 = VarNode {
+            let x2 = Variable {
                 content: self.input1.clone().unwrap().clone(),
             };
             vec![gys[0].clone() * x2, gys[0].clone() * x1]
@@ -232,11 +232,11 @@ impl Function for Mul {
 #[derive(BiFunction, FunctionNode)]
 pub struct MatMul {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl MatMul {
@@ -257,12 +257,12 @@ impl Function for MatMul {
         let y = utils::matmul(&x0, &x1).unwrap();
         vec![y]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         let gy = gys[0].clone();
-        let x = VarNode {
+        let x = Variable {
             content: self.input0.clone().unwrap().clone(),
         };
-        let w = VarNode {
+        let w = Variable {
             content: self.input1.clone().unwrap().clone(),
         };
         let gx = matmal(gy.clone(), w.transpose());
@@ -271,18 +271,18 @@ impl Function for MatMul {
     }
 }
 
-pub fn matmal(x: VarNode, w: VarNode) -> VarNode {
+pub fn matmal(x: Variable, w: Variable) -> Variable {
     MatMul::new().apply(x, w)
 }
 
 #[derive(BiFunction, FunctionNode)]
 pub struct Sub {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Sub {
@@ -302,7 +302,7 @@ impl Function for Sub {
         let x2 = inputs[1].clone();
         vec![x1 - x2]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         return vec![gys[0].clone(), -gys[0].clone()];
     }
@@ -311,11 +311,11 @@ impl Function for Sub {
 #[derive(BiFunction, FunctionNode)]
 pub struct Div {
     #[node_I]
-    input0: Option<Rc<RefCell<Variable>>>,
+    input0: Option<Rc<RefCell<VarData>>>,
     #[node_I]
-    input1: Option<Rc<RefCell<Variable>>>,
+    input1: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Div {
@@ -335,13 +335,13 @@ impl Function for Div {
         let x2 = inputs[1].clone();
         vec![x1 / x2]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if self.input0.is_some() && self.input1.is_some() {
-            let x1 = VarNode {
+            let x1 = Variable {
                 content: self.input0.clone().unwrap().clone(),
             };
-            let x2 = VarNode {
+            let x2 = Variable {
                 content: self.input1.clone().unwrap().clone(),
             };
             vec![
@@ -356,9 +356,9 @@ impl Function for Div {
 #[derive(UniFunction, FunctionNode)]
 pub struct Neg {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Neg {
@@ -376,7 +376,7 @@ impl Function for Neg {
         let x = inputs[0].clone();
         vec![-x]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.input {
             return vec![-gys[0].clone()];
@@ -389,9 +389,9 @@ impl Function for Neg {
 #[derive(UniFunction, FunctionNode)]
 pub struct Pow {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
     factor: i32,
 }
 
@@ -411,10 +411,10 @@ impl Function for Pow {
         let x = inputs[0].clone();
         vec![x.powi(self.factor)]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = VarNode { content: v.clone() };
+            let x = Variable { content: v.clone() };
             return vec![self.factor as f64 * x.powi(self.factor - 1) * gys[0].clone()];
         } else {
             return vec![];
@@ -425,9 +425,9 @@ impl Function for Pow {
 #[derive(UniFunction, FunctionNode)]
 pub struct Sin {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Sin {
@@ -445,10 +445,10 @@ impl Function for Sin {
         let x = inputs[0].clone();
         vec![x.sin()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = VarNode { content: v.clone() };
+            let x = Variable { content: v.clone() };
             return vec![gys[0].clone() * Cos::new().apply(x)];
         } else {
             return vec![];
@@ -459,9 +459,9 @@ impl Function for Sin {
 #[derive(UniFunction, FunctionNode)]
 pub struct Cos {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Cos {
@@ -479,10 +479,10 @@ impl Function for Cos {
         let x = inputs[0].clone();
         vec![x.cos()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.input {
-            let x = VarNode { content: v.clone() };
+            let x = Variable { content: v.clone() };
             return vec![-Sin::new().apply(x) * gys[0].clone()];
         } else {
             return vec![];
@@ -493,9 +493,9 @@ impl Function for Cos {
 #[derive(UniFunction, FunctionNode)]
 pub struct Tanh {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Tanh {
@@ -513,10 +513,10 @@ impl Function for Tanh {
         let x = inputs[0].clone();
         vec![(x.exp() - x.exp().powi(-1)) / (x.exp() + x.exp().powi(-1))]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(v) = &self.output {
-            let y = VarNode { content: v.clone() };
+            let y = Variable { content: v.clone() };
             let gy = gys[0].clone();
             return vec![gy * (1.0 - y.powi(2))];
         } else {
@@ -529,9 +529,9 @@ impl Function for Tanh {
 pub struct Reshape {
     shape: Vec<usize>,
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Reshape {
@@ -551,7 +551,7 @@ impl Function for Reshape {
         let reshaped = x.to_shape(self.shape.clone());
         vec![reshaped.unwrap().to_owned()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
             let gy = gys[0].clone();
@@ -563,7 +563,7 @@ impl Function for Reshape {
     }
 }
 
-pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
+pub fn reshape(x: Variable, shape: Vec<usize>) -> Variable {
     if x.data().shape() == shape {
         x
     } else {
@@ -574,9 +574,9 @@ pub fn reshape(x: VarNode, shape: Vec<usize>) -> VarNode {
 #[derive(UniFunction, FunctionNode)]
 pub struct Transpose {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Transpose {
@@ -594,7 +594,7 @@ impl Function for Transpose {
         let x = inputs[0].clone();
         vec![x.t().to_owned()]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         if let Some(_v) = &self.output {
             let gy = gys[0].clone();
@@ -605,7 +605,7 @@ impl Function for Transpose {
     }
 }
 
-pub fn transpose(x: VarNode) -> VarNode {
+pub fn transpose(x: Variable) -> Variable {
     Transpose::new()(x)
 }
 
@@ -614,9 +614,9 @@ pub struct Sum {
     axis: usize,
     keep_dims: bool,
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Sum {
@@ -655,7 +655,7 @@ impl Function for Sum {
         vec![y]
     }
 
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         let gx = bloadcast_to(gy, x_dim);
@@ -667,9 +667,9 @@ impl Function for Sum {
 pub struct BloadcastTo {
     dim: Dim<IxDynImpl>,
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl BloadcastTo {
@@ -688,14 +688,14 @@ impl Function for BloadcastTo {
         vec![x.broadcast(self.dim.clone()).unwrap().to_owned()]
     }
 
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![sum_to(gy, x_dim)]
     }
 }
 
-pub fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
+pub fn bloadcast_to(x: Variable, dim: Dim<IxDynImpl>) -> Variable {
     if x.data().dim() == dim {
         x
     } else {
@@ -707,9 +707,9 @@ pub fn bloadcast_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
 struct SumTo {
     dim: Dim<IxDynImpl>,
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl SumTo {
@@ -729,14 +729,14 @@ impl Function for SumTo {
         vec![utils::sum_to(x, shape)]
     }
 
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         let gy = gys[0].clone();
         let x_dim = self.input.clone().unwrap().borrow().data.dim();
         vec![bloadcast_to(gy, x_dim)]
     }
 }
 
-fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
+fn sum_to(x: Variable, dim: Dim<IxDynImpl>) -> Variable {
     if x.data().dim() == dim {
         x
     } else {
@@ -744,14 +744,14 @@ fn sum_to(x: VarNode, dim: Dim<IxDynImpl>) -> VarNode {
     }
 }
 
-pub fn sigmoid(x: VarNode) -> VarNode {
+pub fn sigmoid(x: Variable) -> Variable {
     Sigmoid::new()(x)
 }
 
-fn numerical_diff(f: &mut impl Function, x: Variable) -> Array<f64, IxDyn> {
+fn numerical_diff(f: &mut impl Function, x: VarData) -> Array<f64, IxDyn> {
     let eps = 1e-4;
-    let x0 = Variable::new(x.data.clone() - eps);
-    let x1 = Variable::new(x.data.clone() + eps);
+    let x0 = VarData::new(x.data.clone() - eps);
+    let x1 = VarData::new(x.data.clone() + eps);
     let y0 = f.call(&[Rc::new(RefCell::new(x0))]);
     let y0_data = y0[0].borrow_mut().data.clone();
     let y1 = f.call(&[Rc::new(RefCell::new(x1))]);
@@ -770,7 +770,7 @@ mod tests {
     fn square_test() {
         let x1 = vec![5.0, 10.0];
         let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
-        let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
+        let x2 = VarData::new(Array1::from_vec(x1).into_dyn());
         let mut f = Square::new();
         let actual = f.call(&[Rc::new(RefCell::new(x2))]);
         assert_eq!(1, actual.len());
@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn same_var_test() {
-        let x = Variable::from_vec1(vec![3.0]).to_node();
+        let x = VarData::from_vec1(vec![3.0]).to_node();
         let mut add = Add::new();
         let y = add(x.clone(), x.clone());
         y.backward();
@@ -795,7 +795,7 @@ mod tests {
     #[test]
     fn backward_test() {
         let input = vec![10.0];
-        let x = Variable::from_vec1(input.clone()).to_node();
+        let x = VarData::from_vec1(input.clone()).to_node();
         let expected: Vec<f64> = input.iter().map(|x| 2.0 * x).collect();
         let mut f = Square::new();
         let y = f(x.clone());
@@ -806,7 +806,7 @@ mod tests {
 
     #[test]
     fn calc_graph_test() {
-        let x = Variable::from_vec1(vec![2.0]).to_node();
+        let x = VarData::from_vec1(vec![2.0]).to_node();
         let mut square = Square::new();
         let mut add = Add::new();
         let a = square(x.clone());
@@ -825,7 +825,7 @@ mod tests {
         no_grad! {
             let x1 = vec![5.0, 10.0];
             let expected: Vec<f64> = x1.iter().map(|&x| x * x).collect();
-            let x2 = Variable::new(Array1::from_vec(x1).into_dyn());
+            let x2 = VarData::new(Array1::from_vec(x1).into_dyn());
             let mut f = Square::new();
             let actual = f.call(&[Rc::new(RefCell::new(x2))]);
             assert_eq!(1, actual.len());
@@ -841,14 +841,13 @@ mod tests {
     #[test]
     fn sum_function_test() {
         let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
-        let x = Variable::new(base.into_dyn()).to_node();
+        let x = Variable::from_arry(base.into_dyn());
         let y = Sum::new_axis_keep_dim(0, false)(x.clone());
         y.backward();
         println!("{}", y);
         println!("{}", x.grad().unwrap());
         let x =
-            Variable::new(ndarray::array![[[1., 2.], [3., 4.]], [[5., 6.], [7., 8.]]].into_dyn())
-                .to_node();
+            Variable::from_arry(ndarray::array![[[1., 2.], [3., 4.]], [[5., 6.], [7., 8.]]].into_dyn());
         let y = Sum::new_axis_keep_dim(usize::MAX, true).apply(x.clone());
         y.backward();
         println!("{}", y);
@@ -858,7 +857,7 @@ mod tests {
     #[test]
     fn sum_to_function_test() {
         let base = ndarray::array![[1., 2., 3.], [4., 5., 6.]];
-        let x = Variable::new(base.into_dyn()).to_node();
+        let x = Variable::from_arry(base.into_dyn());
         let y = sum_to(x.clone(), IxDyn(&[1, 3]));
         println!("{}", y);
         let y = sum_to(x, IxDyn(&[2, 1]));
@@ -867,8 +866,8 @@ mod tests {
 
     #[test]
     fn bloadcast_add_test() {
-        let x0 = Variable::new(ndarray::array![1., 2., 3.].into_dyn()).to_node();
-        let x1 = Variable::new(ndarray::array![10.0].into_dyn()).to_node();
+        let x0 = Variable::from_arry(ndarray::array![1., 2., 3.].into_dyn());
+        let x1 = Variable::from_arry(ndarray::array![10.0].into_dyn());
         let y = x0.clone() + x1.clone();
         println!("{}", y);
         y.backward();
@@ -880,10 +879,10 @@ mod tests {
     fn matmul_test() {
         let a: ArrayBase<OwnedRepr<f64>, _> =
             ArrayBase::from_shape_vec(IxDyn(&[2, 3]), vec![1., 2., 3., 4., 5., 6.]).unwrap();
-        let x = Variable::new(a).to_node();
+        let x = Variable::from_arry(a);
         let b: ArrayBase<OwnedRepr<f64>, _> =
             ArrayBase::from_shape_vec(IxDyn(&[3, 2]), vec![7., 8., 9., 10., 11., 12.]).unwrap();
-        let w = Variable::new(b).to_node();
+        let w = Variable::from_arry(b);
         let y = matmal(x.clone(), w.clone());
         y.backward();
         println!("{}", x.grad().unwrap());

@@ -74,8 +74,8 @@ pub fn function_node_derive(input: TokenStream) -> TokenStream {
         impl FunctionNode for #name {
             fn new_instance(
                 &self,
-                inputs: &[Rc<RefCell<Variable>>],
-                outputs: &[Rc<RefCell<Variable>>],
+                inputs: &[Rc<RefCell<VarData>>],
+                outputs: &[Rc<RefCell<VarData>>],
             ) -> Rc<dyn Function> {
                 let f = #name {
                     #(#input_quote)*
@@ -84,12 +84,12 @@ pub fn function_node_derive(input: TokenStream) -> TokenStream {
                 };
                 Rc::new(f)
             }
-            fn get_inputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+            fn get_inputs(&self) -> Vec<Rc<RefCell<VarData>>> {
                 let mut inputs = Vec::new();
                 #(#input_append)*
                 inputs
             }
-            fn get_outputs(&self) -> Vec<Rc<RefCell<Variable>>> {
+            fn get_outputs(&self) -> Vec<Rc<RefCell<VarData>>> {
                 let mut outputs = Vec::new();
                 #(#output_append)*
                 outputs
@@ -105,7 +105,7 @@ pub fn bifunction_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let target = quote! { crate::core::function::BiFunction };
-    let arg = quote! { crate::core::variable::VarNode };
+    let arg = quote! { crate::core::variable::Variable };
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
         impl #target for #name {}
@@ -132,7 +132,7 @@ pub fn unifunction_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let target = quote! { crate::core::function::UniFunction };
-    let arg = quote! { crate::core::variable::VarNode };
+    let arg = quote! { crate::core::variable::Variable };
 
     let expanded = quote! {
         impl #target for #name {}
@@ -165,7 +165,7 @@ pub fn learnable_derive(input: TokenStream) -> TokenStream {
                 let mut statements = Vec::new();
                 for f in fields.named.into_iter() {
                     if let syn::Type::Path(tp) = &f.ty {
-                        if tp.path.is_ident("VarNode") {
+                        if tp.path.is_ident("Variable") {
                             let ident = &f.ident;
                             let state = quote! {
                                 set.insert(self.#ident.clone());
@@ -192,7 +192,7 @@ pub fn learnable_derive(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl Learnable for #name {
-            fn parameters(&self) -> std::collections::HashSet<VarNode> {
+            fn parameters(&self) -> std::collections::HashSet<Variable> {
                 let mut set = std::collections::HashSet::new();
                 #(#statesments)*
                 set

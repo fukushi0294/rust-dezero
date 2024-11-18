@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    core::variable::{VarNode, Variable},
+    core::variable::{VarNode, VarData},
     enable_backprop, utils::WeakKey,
 };
 
@@ -40,7 +40,7 @@ impl Optimizer for SGD {
 pub struct MomentumSGD {
     lr: f64,
     delta: f64,
-    vs: HashMap<WeakKey<Variable>, Variable>,
+    vs: HashMap<WeakKey<VarData>, VarData>,
     params: HashSet<VarNode>,
 }
 

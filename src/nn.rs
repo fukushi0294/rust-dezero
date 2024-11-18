@@ -3,16 +3,16 @@ use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
 use crate::core::function::{self as F, Function, FunctionNode, UniFunction};
-use crate::core::variable::{VarNode, Variable};
+use crate::core::variable::{Variable, VarData};
 use derives::{FunctionNode, Learnable, UniFunction};
 use ndarray::{Array, IxDyn};
 
 pub trait Layer {
-    fn forward(&self, x: VarNode) -> VarNode;
+    fn forward(&self, x: Variable) -> Variable;
 }
 
 pub trait Learnable {
-    fn parameters(&self) -> HashSet<VarNode> {
+    fn parameters(&self) -> HashSet<Variable> {
         HashSet::new()
     }
 }
@@ -21,14 +21,14 @@ pub trait Learnable {
 pub struct Linear {
     input: usize,
     output: usize,
-    w: VarNode,
-    b: VarNode,
+    w: Variable,
+    b: Variable,
 }
 
 impl Linear {
     pub fn new(input: usize, output: usize) -> Self {
-        let w = Variable::zeros((input, output)).to_node();
-        let b = Variable::zero(output).to_node();
+        let w = Variable::zeros((input, output));
+        let b = Variable::zero(output);
         Linear {
             input,
             output,
@@ -39,7 +39,7 @@ impl Linear {
 }
 
 impl Layer for Linear {
-    fn forward(&self, x: VarNode) -> VarNode {
+    fn forward(&self, x: Variable) -> Variable {
         let w_node = self.w.clone();
         let b_node = self.b.clone();
         F::matmal(x, w_node) + b_node
@@ -59,7 +59,7 @@ impl Sequential {
 }
 
 impl Layer for Sequential {
-    fn forward(&self, x: VarNode) -> VarNode {
+    fn forward(&self, x: Variable) -> Variable {
         let mut x_out = x.clone();
         for l in self.layers.iter() {
             x_out = l.forward(x_out.clone());
@@ -69,7 +69,7 @@ impl Layer for Sequential {
 }
 
 impl Learnable for Sequential {
-    fn parameters(&self) -> HashSet<VarNode> {
+    fn parameters(&self) -> HashSet<Variable> {
         self.layers
             .iter()
             .flat_map(|l| l.parameters().into_iter())
@@ -81,9 +81,9 @@ impl Learnable for Sequential {
 #[derive(UniFunction, FunctionNode)]
 pub struct Sigmoid {
     #[node_I]
-    input: Option<Rc<RefCell<Variable>>>,
+    input: Option<Rc<RefCell<VarData>>>,
     #[node_O]
-    output: Option<Rc<RefCell<Variable>>>,
+    output: Option<Rc<RefCell<VarData>>>,
 }
 
 impl Sigmoid {
@@ -102,9 +102,9 @@ impl Function for Sigmoid {
         let y = 1.0 / (1.0 + (-x).exp());
         vec![y]
     }
-    fn backward(&self, gys: Vec<VarNode>) -> Vec<VarNode> {
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
         assert!(gys.len() == 1, "inputs slice size must be 1");
-        let y = VarNode {
+        let y = Variable {
             content: self.output.clone().unwrap().clone(),
         };
         return vec![gys[0].clone() * y.clone() * (1. - y)];
