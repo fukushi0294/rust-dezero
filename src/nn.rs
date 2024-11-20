@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
-use crate::core::function::{self as F, Function, FunctionNode, UniFunction};
-use crate::core::variable::{Variable, VarData};
+use crate::core::function::{self as F, Function, FunctionNode, Sum, UniFunction};
+use crate::core::variable::{VarData, Variable};
 use derives::{FunctionNode, Learnable, UniFunction};
-use ndarray::{Array, IxDyn};
+use ndarray::{Array, Axis, IxDyn};
 
 pub trait Layer {
     fn forward(&self, x: Variable) -> Variable;
@@ -106,5 +106,45 @@ impl Function for Sigmoid {
         assert!(gys.len() == 1, "inputs slice size must be 1");
         let y = self.output.clone().unwrap().clone();
         return vec![gys[0].clone() * y.clone() * (1. - y)];
+    }
+}
+
+#[derive(UniFunction, FunctionNode)]
+pub struct SoftMax {
+    #[node_I]
+    input: Option<Variable>,
+    #[node_O]
+    output: Option<Variable>,
+    axis: usize,
+}
+
+impl SoftMax {
+    pub fn new(axis: usize) -> Self {
+        SoftMax {
+            input: None,
+            output: None,
+            axis,
+        }
+    }
+}
+
+impl Function for SoftMax {
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        let y = x.view().exp();
+        let y_sum = y.clone().to_owned().sum_axis(Axis(self.axis));
+        vec![y / y_sum]
+    }
+
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        let y = self.output.clone().unwrap().clone();
+        let gy = gys[0].clone();
+        let gx = y.clone() * gy;
+        let mut sum = Sum::new_axis_keep_dim(self.axis, true);
+        let sumdx = sum(gx.clone());
+        let gx = gx - y * sumdx;
+        return vec![gx];
     }
 }
