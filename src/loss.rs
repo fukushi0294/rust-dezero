@@ -1,11 +1,16 @@
 use std::{cell::RefCell, rc::Rc};
 
 use derives::{BiFunction, FunctionNode};
+use ndarray::{array, Axis};
 
-use crate::core::{
+use crate::{
+    core::{
         function::{self, BiFunction, Function, FunctionNode},
-        variable::{Variable},
-    };
+        variable::Variable,
+    },
+    nn::SoftMax,
+    utils,
+};
 
 #[derive(BiFunction, FunctionNode)]
 pub struct MeanSquaredError {
@@ -56,6 +61,54 @@ impl Function for MeanSquaredError {
     }
 }
 
+#[derive(BiFunction, FunctionNode)]
+pub struct CrossEntropyLoss {
+    #[node_I]
+    y_pred: Option<Variable>,
+    #[node_I]
+    y_true: Option<Variable>,
+    #[node_O]
+    output: Option<Variable>,
+}
+
+impl CrossEntropyLoss {
+    pub fn new() -> Self {
+        CrossEntropyLoss {
+            y_pred: None,
+            y_true: None,
+            output: None,
+        }
+    }
+}
+
+impl Function for CrossEntropyLoss {
+    fn forward(
+        &self,
+        inputs: &[ndarray::Array<f64, ndarray::IxDyn>],
+    ) -> Vec<ndarray::Array<f64, ndarray::IxDyn>> {
+        let x = inputs[0].clone(); // logits
+        let n = x.len();
+        let y = inputs[1].clone();
+        let t_index: Vec<usize> = y.mapv(|x| x.round() as usize).into_raw_vec_and_offset().0; // label index
+
+        let log_z = utils::logsumexp(&x, 1);
+        let log_p = x - log_z;
+        let tlog_p = log_p.select(Axis(1), &t_index);
+        let y = -tlog_p.sum() / (n as f64);
+        vec![array![y].into_dyn()]
+    }
+
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
+        let gy = gys[0].clone();
+        let x = self.y_pred.clone().unwrap().clone(); // logits
+        let y = self.y_true.clone().unwrap().clone(); // label
+        let y_onehot = utils::one_hot(&y);
+        let p = SoftMax::new(1)(x);
+        let gx = gy * (p - y_onehot);
+        vec![gx]
+    }
+}
+
 mod test {
 
     use ndarray::{Array, Array1, Array2};
@@ -65,7 +118,7 @@ mod test {
     use crate::{
         core::{
             function::{self, BiFunction},
-            variable::{Variable, VarData},
+            variable::{VarData, Variable},
         },
         loss,
     };

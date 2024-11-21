@@ -5,6 +5,8 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use crate::core::variable::{VarData, Variable};
+
 /// Sum elements along axes to output an array of a given shape.
 ///
 /// # Arguments
@@ -119,6 +121,34 @@ impl<T> Hash for WeakKey<T> {
             None => 0.hash(state),
         }
     }
+}
+
+pub fn logsumexp(x: &Array<f64, IxDyn>, axis: usize) -> Array<f64, IxDyn> {
+    let axis = Axis(axis);
+    let m = x
+        .map_axis(axis, |row| {
+            row.iter().cloned().fold(f64::MIN, |acc, x| acc.max(x))
+        })
+        .insert_axis(axis);
+    let y = x - &m;
+    let y = y.exp();
+    let s = y.sum_axis(axis).insert_axis(axis);
+    let s = s.ln();
+    m + s
+}
+
+pub fn one_hot(x: &Variable) -> Variable {
+    let x = x.content.borrow();
+    let n = x.data.len();
+    let v = x
+        .data
+        .clone()
+        .mapv(|x| x.round() as usize)
+        .into_raw_vec_and_offset()
+        .0;
+    let e = ndarray::Array2::eye(n);
+    let one_hot = e.select(Axis(0), &v);
+    Variable::from_arry(one_hot.into_dyn())
 }
 
 mod tests {
