@@ -1,10 +1,9 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::{collections::HashSet, usize};
 
 use crate::core::function::{self as F, Function, FunctionNode, Sum, UniFunction};
-use crate::core::variable::{VarData, Variable};
-use derives::{FunctionNode, Learnable, UniFunction};
+use crate::core::variable::Variable;
+use derives::{FunctionNode, Learnable, Module, UniFunction};
 use ndarray::{Array, Axis, IxDyn};
 
 pub trait Layer {
@@ -17,7 +16,9 @@ pub trait Learnable {
     }
 }
 
-#[derive(Learnable)]
+pub trait Module: Layer + Learnable {}
+
+#[derive(Learnable, Module)]
 pub struct Linear {
     input: usize,
     output: usize,
@@ -46,8 +47,7 @@ impl Layer for Linear {
     }
 }
 
-pub trait Module: Layer + Learnable {}
-
+#[derive(Module)]
 pub struct Sequential {
     layers: Vec<Box<dyn Module>>,
 }
@@ -56,6 +56,18 @@ impl Sequential {
     pub fn new(layers: Vec<Box<dyn Module>>) -> Self {
         Sequential { layers }
     }
+}
+
+#[macro_export]
+macro_rules! sequential {
+    ($($layer:expr),* $(,)?) => {
+        {
+            let layers: Vec<Box<dyn $crate::nn::Module>> = vec![
+                $(Box::new($layer)),*
+            ];
+            $crate::nn::Sequential::new(layers)
+        }
+    };
 }
 
 impl Layer for Sequential {
@@ -150,7 +162,7 @@ impl Function for Softmax {
 }
 
 mod tests {
-    use crate::{core::variable::Variable, utils};
+    use crate::{core::variable::Variable, nn, utils};
 
     use super::Softmax;
 

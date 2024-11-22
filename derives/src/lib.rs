@@ -154,6 +154,17 @@ pub fn unifunction_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+#[proc_macro_derive(Module)]
+pub fn nn_module_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    let target = quote! { crate::nn::Module };
+    let expanded = quote! {
+        impl #target for #name {}
+    };
+    TokenStream::from(expanded)
+}
+
 #[proc_macro_derive(Learnable, attributes(learnable))]
 pub fn learnable_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
