@@ -110,7 +110,7 @@ impl Function for Sigmoid {
 }
 
 #[derive(UniFunction, FunctionNode)]
-pub struct SoftMax {
+pub struct Softmax {
     #[node_I]
     input: Option<Variable>,
     #[node_O]
@@ -118,9 +118,9 @@ pub struct SoftMax {
     axis: usize,
 }
 
-impl SoftMax {
+impl Softmax {
     pub fn new(axis: usize) -> Self {
-        SoftMax {
+        Softmax {
             input: None,
             output: None,
             axis,
@@ -128,7 +128,7 @@ impl SoftMax {
     }
 }
 
-impl Function for SoftMax {
+impl Function for Softmax {
     fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
         assert!(inputs.len() == 1, "inputs slice size must be 1");
         let x = inputs[0].clone();
@@ -146,5 +146,37 @@ impl Function for SoftMax {
         let sumdx = sum(gx.clone());
         let gx = gx - y * sumdx;
         return vec![gx];
+    }
+}
+
+mod tests {
+    use crate::{core::variable::Variable, utils};
+
+    use super::Softmax;
+
+    #[test]
+    fn softmax_forward() {
+        let input = Variable::from_arry(ndarray::array![[1.0, 2.0, 3.0]].into_dyn());
+        let expected =
+            Variable::from_arry(ndarray::array![[0.09003057, 0.24472847, 0.66524096,]].into_dyn());
+
+        let mut softmax = Softmax::new(1);
+        let actual = softmax(input);
+        println!("{}", actual);
+        assert_eq!(actual.is_same(&expected, 1e-8), true)
+    }
+
+    #[test]
+    fn softmax_backward() {
+        let input = Variable::from_arry(ndarray::array![[1.0, 2.0, 3.0]].into_dyn());
+        let mut softmax = Softmax::new(1);
+
+        let expected = utils::numerical_diff(&mut softmax, input.clone());
+        let mut output = softmax(input.clone());
+        output.backward();
+        let actual = input.grad().unwrap();
+        println!("{}", &actual);
+        println!("{}", &expected);
+        assert_eq!(actual.is_same(&expected, 1e-8), true)
     }
 }

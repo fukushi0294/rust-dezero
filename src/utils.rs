@@ -5,7 +5,9 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use crate::core::function::UniFunction;
 use crate::core::variable::{VarData, Variable};
+use crate::enable_backprop;
 
 /// Sum elements along axes to output an array of a given shape.
 ///
@@ -149,6 +151,18 @@ pub fn one_hot(x: &Variable) -> Variable {
     let e = ndarray::Array2::eye(n);
     let one_hot = e.select(Axis(0), &v);
     Variable::from_arry(one_hot.into_dyn())
+}
+
+pub fn numerical_diff(f: &mut impl UniFunction, x: Variable) -> Variable {
+    enable_backprop!(false, {
+        let eps = 1e-4;
+        let x = x.content.borrow();
+        let x0 = Variable::from(x.clone()) - eps;
+        let x1 = Variable::from(x.clone()) + eps;
+        let y0 = f.apply(x0);
+        let y1 = f.apply(x1);
+        return (y1 - y0) / (eps * 2.0);
+    });
 }
 
 mod tests {

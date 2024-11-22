@@ -8,7 +8,7 @@ use crate::{
         function::{self, BiFunction, Function, FunctionNode},
         variable::Variable,
     },
-    nn::SoftMax,
+    nn::Softmax,
     utils,
 };
 
@@ -103,7 +103,7 @@ impl Function for CrossEntropyLoss {
         let x = self.y_pred.clone().unwrap().clone(); // logits
         let y = self.y_true.clone().unwrap().clone(); // label
         let y_onehot = utils::one_hot(&y);
-        let p = SoftMax::new(1)(x);
+        let p = Softmax::new(1)(x);
         let gx = gy * (p - y_onehot);
         vec![gx]
     }
