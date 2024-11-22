@@ -196,7 +196,7 @@ pub fn learnable_derive(input: TokenStream) -> TokenStream {
                 }
                 statements
             }
-            _ => panic!("no unnamed fields are allowed"),
+            _ => Vec::new(),
         },
         _ => panic!("expects struct"),
     };

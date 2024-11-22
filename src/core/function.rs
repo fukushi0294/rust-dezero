@@ -1,9 +1,8 @@
 use crate::core::config::CONFIG;
 use crate::core::variable::{VarData, Variable};
-use crate::nn::Sigmoid;
 use crate::utils;
 use derives::{BiFunction, FunctionNode, UniFunction};
-use ndarray::{Array, Dim, Dimension, IxDyn, IxDynImpl};
+use ndarray::{Array, Axis, Dim, Dimension, IxDyn, IxDynImpl};
 use std::rc::Rc;
 use std::{i32, usize};
 
@@ -724,6 +723,77 @@ fn sum_to(x: Variable, dim: Dim<IxDynImpl>) -> Variable {
     }
 }
 
+#[derive(UniFunction, FunctionNode)]
+pub struct Sigmoid {
+    #[node_I]
+    input: Option<Variable>,
+    #[node_O]
+    output: Option<Variable>,
+}
+
+impl Sigmoid {
+    pub fn new() -> Self {
+        Sigmoid {
+            input: None,
+            output: None,
+        }
+    }
+}
+
+impl Function for Sigmoid {
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        let y = 1.0 / (1.0 + (-x).exp());
+        vec![y]
+    }
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        let y = self.output.clone().unwrap().clone();
+        return vec![gys[0].clone() * y.clone() * (1. - y)];
+    }
+}
+
+#[derive(UniFunction, FunctionNode)]
+pub struct Softmax {
+    #[node_I]
+    input: Option<Variable>,
+    #[node_O]
+    output: Option<Variable>,
+    axis: usize,
+}
+
+impl Softmax {
+    pub fn new(axis: usize) -> Self {
+        Softmax {
+            input: None,
+            output: None,
+            axis,
+        }
+    }
+}
+
+impl Function for Softmax {
+    fn forward(&self, inputs: &[Array<f64, IxDyn>]) -> Vec<Array<f64, IxDyn>> {
+        assert!(inputs.len() == 1, "inputs slice size must be 1");
+        let x = inputs[0].clone();
+        let y = x.view().exp();
+        let y_sum = y.clone().to_owned().sum_axis(Axis(self.axis));
+        vec![y / y_sum]
+    }
+
+    fn backward(&self, gys: Vec<Variable>) -> Vec<Variable> {
+        assert!(gys.len() == 1, "inputs slice size must be 1");
+        let y = self.output.clone().unwrap().clone();
+        let gy = gys[0].clone();
+        let gx = y.clone() * gy;
+        let mut sum = Sum::new_axis_keep_dim(self.axis, true);
+        let sumdx = sum(gx.clone());
+        let gx = gx - y * sumdx;
+        return vec![gx];
+    }
+}
+
 pub fn sigmoid(x: Variable) -> Variable {
     Sigmoid::new()(x)
 }
@@ -857,5 +927,31 @@ mod tests {
         y.backward();
         println!("{}", x.grad().unwrap());
         println!("{}", w.grad().unwrap());
+    }
+
+    #[test]
+    fn softmax_forward() {
+        let input = Variable::from_arry(ndarray::array![[1.0, 2.0, 3.0]].into_dyn());
+        let expected =
+            Variable::from_arry(ndarray::array![[0.09003057, 0.24472847, 0.66524096,]].into_dyn());
+
+        let mut softmax = Softmax::new(1);
+        let actual = softmax(input);
+        println!("{}", actual);
+        assert_eq!(actual.is_same(&expected, 1e-8), true)
+    }
+
+    #[test]
+    fn softmax_backward() {
+        let input = Variable::from_arry(ndarray::array![[1.0, 2.0, 3.0]].into_dyn());
+        let mut softmax = Softmax::new(1);
+
+        let expected = utils::numerical_diff(&mut softmax, input.clone());
+        let mut output = softmax(input.clone());
+        output.backward();
+        let actual = input.grad().unwrap();
+        println!("{}", &actual);
+        println!("{}", &expected);
+        assert_eq!(actual.is_same(&expected, 1e-8), true)
     }
 }

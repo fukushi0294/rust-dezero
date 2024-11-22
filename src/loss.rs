@@ -5,10 +5,9 @@ use ndarray::{array, Axis};
 
 use crate::{
     core::{
-        function::{self, BiFunction, Function, FunctionNode},
+        function::{self as F, BiFunction, Function, FunctionNode},
         variable::Variable,
     },
-    nn::Softmax,
     utils,
 };
 
@@ -54,7 +53,7 @@ impl Function for MeanSquaredError {
         let diff = x0 - x1;
         let diff_data = diff.data().clone();
         let gy = gys[0].clone();
-        let gy = function::bloadcast_to(gy, diff_data.dim());
+        let gy = F::bloadcast_to(gy, diff_data.dim());
         let gx0 = gy * diff * (2.0 / diff_data.len() as f64);
         let gx1 = -gx0.clone();
         vec![gx0, gx1]
@@ -103,7 +102,7 @@ impl Function for CrossEntropyLoss {
         let x = self.y_pred.clone().unwrap().clone(); // logits
         let y = self.y_true.clone().unwrap().clone(); // label
         let y_onehot = utils::one_hot(&y);
-        let p = Softmax::new(1)(x);
+        let p = F::Softmax::new(1)(x);
         let gx = gy * (p - y_onehot);
         vec![gx]
     }
