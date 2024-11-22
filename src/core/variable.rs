@@ -1,6 +1,6 @@
 use crate::core::function::{self, BiFunction, Function, UniFunction};
 use crate::enable_backprop;
-use ndarray::{Array, Array1, IxDyn};
+use ndarray::{iter, Array, Array1, IxDyn};
 use ndarray::{Dim, IxDynImpl};
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
@@ -59,6 +59,17 @@ impl VarData {
 
     pub fn to_node(&self) -> Variable {
         Variable::from(self.clone())
+    }
+
+    pub fn is_same(&self, other: &Self, epsilon: f64) -> bool {
+        if self.shape() != other.shape() {
+            return false;
+        }
+        let a = self.data.flatten();
+        let b = other.data.flatten();
+        a.iter()
+            .zip(b.iter())
+            .all(|(x, y)| (x - y).abs() <= epsilon)
     }
 }
 
@@ -254,6 +265,12 @@ impl Variable {
 
     pub fn data(&self) -> Array<f64, IxDyn> {
         self.content.borrow().data.clone()
+    }
+
+    pub fn is_same(&self, other: &Self, epsilon: f64) -> bool {
+        let v1 = self.content.borrow();
+        let v2 = other.content.borrow();
+        v1.is_same(&v2, epsilon)
     }
 
     pub fn set_data(&self, data: Array<f64, IxDyn>) {
